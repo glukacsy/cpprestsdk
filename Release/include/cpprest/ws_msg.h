@@ -82,7 +82,16 @@ public:
     {
         this->set_message_pong();
     }
-#endif
+    
+	/// <summary>
+	/// Sets a the outgoing message to be an unsolicited pong message.
+	/// This is useful when the client side wants to check whether the server is alive.
+	/// </summary>
+	void set_pong_message()
+	{
+		this->set_message_pong();
+	}
+>>>>>>> Add unsolicited pong support
 
     /// <summary>
     /// Sets a UTF-8 message as the message body.
