@@ -73,6 +73,7 @@ elseif(ANDROID)
   set(BUILD_SAMPLES OFF)
   option(BUILD_TESTS "Build tests." ON)
 elseif(UNIX) # This includes OSX
+  set(Boost_USE_STATIC_LIBS ON)
   find_package(Boost REQUIRED COMPONENTS random chrono system thread regex filesystem)
   find_package(Threads REQUIRED)
   if(APPLE AND NOT OPENSSL_ROOT_DIR)
