@@ -490,8 +490,6 @@ private:
     utility::string_t m_scope;
     utility::string_t m_state;
 
-	web::web_proxy m_proxy;
-
     bool m_implicit_grant;
     bool m_bearer_auth;
     bool m_http_basic_auth;
@@ -500,6 +498,8 @@ private:
     oauth2_token m_token;
 
     utility::nonce_generator m_state_generator;
+    // Warning  - this field caused a crash on mac when it was in the middle of the structure instead of at the end
+	web::web_proxy m_proxy;
 };
 
 } // namespace web::http::oauth2::experimental
