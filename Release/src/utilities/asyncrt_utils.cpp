@@ -25,6 +25,14 @@
 #endif
 #endif
 
+
+#define CPPREST_STDLIB_UNICODE_CONVERSIONS
+// Could use C++ standard library if not __GLIBCXX__,
+// For testing purposes we just the handwritten on all platforms.
+#if defined(CPPREST_STDLIB_UNICODE_CONVERSIONS)
+#include <codecvt>
+#endif
+
 using namespace web;
 using namespace utility;
 using namespace utility::conversions;
@@ -264,6 +272,10 @@ const std::error_category & __cdecl linux_category()
 
 inline size_t count_utf8_to_utf16(const std::string& s)
 {
+#if defined(CPPREST_STDLIB_UNICODE_CONVERSIONS)
+    std::wstring_convert<std::codecvt_utf8_utf16<utf16char>, utf16char> conversion;
+    return conversion.from_bytes(s);
+#else
     const size_t sSize = s.size();
     const char* const sData = s.data();
     size_t result{ sSize };
@@ -336,6 +348,7 @@ inline size_t count_utf8_to_utf16(const std::string& s)
     }
 
     return result;
+#endif
 }
 
 utf16string __cdecl conversions::utf8_to_utf16(const std::string &s)
@@ -401,6 +414,20 @@ utf16string __cdecl conversions::utf8_to_utf16(const std::string &s)
 
 inline size_t count_utf16_to_utf8(const utf16string &w)
 {
+ #if defined(CPPREST_STDLIB_UNICODE_CONVERSIONS)
+    try
+    {
+        std::wstring_convert<std::codecvt_utf8_utf16<utf16char>, utf16char> conversion;
+        return conversion.to_bytes(w);
+    }
+    catch (std::range_error& exception)
+    {
+        std::cout << exception.what();
+    }
+    
+    return "**ERROR_PROCESSING_CONTENT**";
+    
+ #else
     const utf16string::value_type * const srcData = &w[0];
     const size_t srcSize = w.size();
     size_t destSize(srcSize);
@@ -420,13 +447,13 @@ inline size_t count_utf16_to_utf8(const utf16string &w)
             ++index;
             if (index == srcSize)
             {
-                throw std::range_error("UTF-16 string is missing low surrogate");
+                throw std::range_error("UTF-16 string has missing low *** surrogate");
             }
 
             const auto lowSurrogate = srcData[index];
             if (lowSurrogate < L_SURROGATE_START || lowSurrogate > L_SURROGATE_END)
             {
-                throw std::range_error("UTF-16 string has invalid low surrogate");
+                throw std::range_error("UTF-16 string has invalid low *** surrogate");
             }
 
             destSize += 2;
@@ -438,6 +465,7 @@ inline size_t count_utf16_to_utf8(const utf16string &w)
     }
 
     return destSize;
+#endif
 }
 
 std::string __cdecl conversions::utf16_to_utf8(const utf16string &w)

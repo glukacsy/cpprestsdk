@@ -114,6 +114,31 @@ elseif(ANDROID)
     "${ANDROID_NDK}/sources/cxx-stl/gnu-libstdc++/4.8/include/backward"
     )
 elseif(UNIX) # This includes OSX
+  set(Boost_USE_STATIC_LIBS ON)
+  find_package(Boost REQUIRED COMPONENTS random chrono system thread regex filesystem)
+  find_package(Threads REQUIRED)
+  if(APPLE AND NOT OPENSSL_ROOT_DIR)
+    # Prefer a homebrew version of OpenSSL over the one in /usr/lib
+    file(GLOB OPENSSL_ROOT_DIR /usr/local/Cellar/openssl/*)
+    # Prefer the latest (make the latest one first)
+    list(REVERSE OPENSSL_ROOT_DIR)
+  endif()
+  # This should prevent linking against the system provided 0.9.8y
+  set(_OPENSSL_VERSION "")
+  find_package(OpenSSL 1.0.0 REQUIRED)
+
+  option(BUILD_SHARED_LIBS "Build shared Libraries." ON)
+  option(BUILD_TESTS "Build tests." ON)
+  option(BUILD_SAMPLES "Build samples." ON)
+  option(CASA_INSTALL_HEADERS "Install header files." ON)
+  if(CASA_INSTALL_HEADERS)
+    file(GLOB CASA_HEADERS_CPPREST include/cpprest/*.hpp include/cpprest/*.h include/cpprest/*.dat)
+    install(FILES ${CASA_HEADERS_CPPREST} DESTINATION include/cpprest)
+    file(GLOB CASA_HEADERS_PPLX include/pplx/*.hpp include/pplx/*.h)
+    install(FILES ${CASA_HEADERS_PPLX} DESTINATION include/pplx)
+    file(GLOB CASA_HEADERS_DETAILS include/cpprest/details/*.hpp include/cpprest/details/*.h include/cpprest/details/*.dat)
+    install(FILES ${CASA_HEADERS_DETAILS} DESTINATION include/cpprest/details)
+  endif()
 elseif(WIN32)
   add_definitions(-DUNICODE -D_UNICODE -D_WIN32_WINNT=0x0600 -DWIN32 -D_SCL_SECURE_NO_WARNINGS)
 
