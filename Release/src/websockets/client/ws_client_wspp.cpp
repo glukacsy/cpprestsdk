@@ -11,11 +11,14 @@
 * =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ****/
 
+#define _SCL_SECURE_NO_WARNINGS // Avoid a warning from WebSocketpp (Windows) + turned off PCHs for this cpp.
+
 #include "stdafx.h"
+
+#include "cpprest/details/x509_cert_utilities.h"
 
 #if !defined(CPPREST_EXCLUDE_WEBSOCKETS)
 
-#include "cpprest/details/x509_cert_utilities.h"
 #include "pplx/threadpool.h"
 
 #include "ws_client_impl.h"
