@@ -19,7 +19,9 @@
     <ClCompile Include="$(MSBuildThisFileDirectory)..\http\listener\http_server_httpsys.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)..\pplx\pplxwin.cpp" />
     <ClCompile Include="$(MSBuildThisFileDirectory)..\streams\fileio_win32.cpp" />
-    <ClCompile Include="$(MSBuildThisFileDirectory)..\websockets\client\ws_client_wspp.cpp" />
+    <ClCompile Include="$(MSBuildThisFileDirectory)..\websockets\client\ws_client_wspp.cpp">
+      <PrecompiledHeader>NotUsing</PrecompiledHeader>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="$(MSBuildThisFileDirectory)..\utilities\Resource.rc" />
