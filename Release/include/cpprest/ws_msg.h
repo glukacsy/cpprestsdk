@@ -82,6 +82,7 @@ public:
     {
         this->set_message_pong();
     }
+#endif
     
     /// <summary>
     /// Sets a UTF-8 message as the message body.
