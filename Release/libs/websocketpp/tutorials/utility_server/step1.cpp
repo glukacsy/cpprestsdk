@@ -22,40 +22,50 @@
  * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
- *
  */
 
-#ifndef WEBSOCKETPP_VERSION_HPP
-#define WEBSOCKETPP_VERSION_HPP
+// **NOTE:** This file is a snapshot of the WebSocket++ utility server tutorial.
+// Additional related material can be found in the tutorials/utility_server
+// directory of the WebSocket++ repository.
 
-/// Namespace for the WebSocket++ project
-namespace websocketpp {
+// The ASIO_STANDALONE define is necessary to use the standalone version of Asio.
+// Remove if you are using Boost Asio.
+#define ASIO_STANDALONE
 
-/*
- other places where version information is kept
- - readme.md
- - changelog.md
- - Doxyfile
- - CMakeLists.txt
-*/
+#include <websocketpp/config/asio_no_tls.hpp>
+#include <websocketpp/server.hpp>
 
-/// Library major version number
-static int const major_version = 0;
-/// Library minor version number
-static int const minor_version = 8;
-/// Library patch version number
-static int const patch_version = 0;
-/// Library pre-release flag
-/**
- * This is a textual flag indicating the type and number for pre-release
- * versions (dev, alpha, beta, rc). This will be blank for release versions.
- */
+#include <functional>
 
-static char const prerelease_flag[] = "dev";
+typedef websocketpp::server<websocketpp::config::asio> server;
 
-/// Default user agent string
-static char const user_agent[] = "WebSocket++/0.8.0-dev";
+class utility_server {
+public:
+    utility_server() {
+         // Set logging settings
+        m_endpoint.set_error_channels(websocketpp::log::elevel::all);
+        m_endpoint.set_access_channels(websocketpp::log::alevel::all ^ websocketpp::log::alevel::frame_payload);
 
-} // namespace websocketpp
+        // Initialize Asio
+        m_endpoint.init_asio();
+    }
 
-#endif // WEBSOCKETPP_VERSION_HPP
+    void run() {
+        // Listen on port 9002
+        m_endpoint.listen(9002);
+
+        // Queues a connection accept operation
+        m_endpoint.start_accept();
+
+        // Start the Asio io_service run loop
+        m_endpoint.run();
+    }
+private:
+    server m_endpoint;
+};
+
+int main() {
+    utility_server s;
+    s.run();
+    return 0;
+}
