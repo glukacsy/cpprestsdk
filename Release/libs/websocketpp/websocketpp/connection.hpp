@@ -150,6 +150,12 @@ typedef lib::function<bool(connection_hdl)> validate_handler;
  */
 typedef lib::function<void(connection_hdl)> http_handler;
 
+/// Reconnection handler
+/**
+  * 
+  */
+typedef lib::function<void(connection_hdl)> reconnect_handler;
+
 //
 typedef lib::function<void(lib::error_code const & ec, size_t bytes_transferred)> read_handler;
 typedef lib::function<void(lib::error_code const & ec)> write_frame_handler;
@@ -161,12 +167,13 @@ typedef lib::function<void(lib::error_code const & ec)> write_frame_handler;
      * @todo Move this to configs to allow compile/runtime disabling or enabling
      * of protocol versions
      */
-#if defined(_MSC_VER)
+#ifdef _WIN32
+// Incorrect warning from VStudio compiler
 #pragma warning(push)
-#pragma warning(disable : 4592)
+#pragma warning(disable:4592)
 #endif
     static std::vector<int> const versions_supported = {0,7,8,13};
-#if defined(_MSC_VER)
+#ifdef _WIN32
 #pragma warning(pop)
 #endif
 #else
@@ -278,6 +285,9 @@ public:
     typedef typename config::con_msg_manager_type con_msg_manager_type;
     typedef typename con_msg_manager_type::ptr con_msg_manager_ptr;
 
+    typedef typename config::proxy_authenticator_type proxy_authenticator_type;
+    typedef typename proxy_authenticator_type::ptr proxy_authenticator_ptr;
+
     /// Type of RNG
     typedef typename config::rng_type rng_type;
 
@@ -293,10 +303,14 @@ public:
     // Misc Convenience Types
     typedef session::internal_state::value istate_type;
 
+    // Reconnect handler (Signalled if we require a reconnection)
+    typedef lib::function<void(connection_hdl)> reconnect_handler;
+
 private:
     enum terminate_status {
         failed = 1,
         closed,
+        proxy_reconnect, // may not need this!
         unknown
     };
 public:
@@ -481,6 +495,16 @@ public:
         m_message_handler = h;
     }
 
+    void set_reconnect_handler(reconnect_handler h) {
+        m_reconnect_handler = h;
+    }
+
+    void set_proxy_authenticator(proxy_authenticator_ptr a) {
+        m_proxy_authenticator = a;
+
+        config::transport_type::transport_con_type::set_proxy_authenticator(a);
+    }
+
     //////////////////////////////////////////
     // Connection timeouts and other limits //
     //////////////////////////////////////////
@@ -556,7 +580,7 @@ public:
 
     /// Get maximum message size
     /**
-     * Get maximum message size. Maximum message size determines the point at
+     * Get maximum message size. Maximum message size determines the point at 
      * which the connection will fail with the message_too_big protocol error.
      *
      * The default is set by the endpoint that creates the connection.
@@ -566,11 +590,11 @@ public:
     size_t get_max_message_size() const {
         return m_max_message_size;
     }
-
+    
     /// Set maximum message size
     /**
-     * Set maximum message size. Maximum message size determines the point at
-     * which the connection will fail with the message_too_big protocol error.
+     * Set maximum message size. Maximum message size determines the point at 
+     * which the connection will fail with the message_too_big protocol error. 
      * This value may be changed during the connection.
      *
      * The default is set by the endpoint that creates the connection.
@@ -585,7 +609,7 @@ public:
             m_processor->set_max_message_size(new_value);
         }
     }
-
+    
     /// Get maximum HTTP message body size
     /**
      * Get maximum HTTP message body size. Maximum message body size determines
@@ -601,7 +625,7 @@ public:
     size_t get_max_http_body_size() const {
         return m_request.get_max_body_size();
     }
-
+    
     /// Set maximum HTTP message body size
     /**
      * Set maximum HTTP message body size. Maximum message body size determines
@@ -708,14 +732,14 @@ public:
      * @return An error code
      */
     lib::error_code interrupt();
-
+    
     /// Transport inturrupt callback
     void handle_interrupt();
-
+    
     /// Pause reading of new data
     /**
-     * Signals to the connection to halt reading of new data. While reading is paused,
-     * the connection will stop reading from its associated socket. In turn this will
+     * Signals to the connection to halt reading of new data. While reading is paused, 
+     * the connection will stop reading from its associated socket. In turn this will 
      * result in TCP based flow control kicking in and slowing data flow from the remote
      * endpoint.
      *
@@ -727,7 +751,7 @@ public:
      *
      * If supported by the transport this is done asynchronously. As such reading may not
      * stop until the current read operation completes. Typically you can expect to
-     * receive no more bytes after initiating a read pause than the size of the read
+     * receive no more bytes after initiating a read pause than the size of the read 
      * buffer.
      *
      * If reading is paused for this connection already nothing is changed.
@@ -1481,7 +1505,7 @@ private:
      * Includes: error code and message for why it was failed
      */
     void log_fail_result();
-
+    
     /// Prints information about HTTP connections
     /**
      * Includes: TODO
@@ -1517,6 +1541,7 @@ private:
     http_handler            m_http_handler;
     validate_handler        m_validate_handler;
     message_handler         m_message_handler;
+    reconnect_handler       m_reconnect_handler;
 
     /// constant values
     long                    m_open_handshake_timeout_dur;
@@ -1604,6 +1629,7 @@ private:
     response_type           m_response;
     uri_ptr                 m_uri;
     std::string             m_subprotocol;
+    proxy_authenticator_ptr m_proxy_authenticator;
 
     // connection data that might not be necessary to keep around for the life
     // of the whole connection.
@@ -1630,7 +1656,7 @@ private:
 
     /// Detailed internal error code
     lib::error_code m_ec;
-
+    
     /// A flag that gets set once it is determined that the connection is an
     /// HTTP connection and not a WebSocket one.
     bool m_is_http;
