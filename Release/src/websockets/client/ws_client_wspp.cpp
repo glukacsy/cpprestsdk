@@ -55,6 +55,7 @@
 #endif
 
 #include <websocketpp/config/asio_client.hpp>
+#include <websocketpp/config/asio_client_authenticated_proxy.hpp>
 #include <websocketpp/config/asio_no_tls_client.hpp>
 #include <websocketpp/client.hpp>
 
@@ -156,7 +157,7 @@ public:
             m_client = std::unique_ptr<websocketpp_client_base>(new websocketpp_tls_client());
 
             // Options specific to TLS client.
-            auto &client = m_client->client<websocketpp::config::asio_tls_client>();
+            auto &client = m_client->client<websocketpp::config::asio_tls_client_authenticated_proxy>();
             client.set_tls_init_handler([this](websocketpp::connection_hdl)
             {
                 auto sslContext = websocketpp::lib::shared_ptr<boost::asio::ssl::context>(new boost::asio::ssl::context(boost::asio::ssl::context::sslv23));
@@ -219,13 +220,36 @@ public:
                 }
             });
 
-            return connect_impl<websocketpp::config::asio_tls_client>();
+            return connect_impl<websocketpp::config::asio_tls_client_authenticated_proxy>();
         }
         else
         {
             m_client = std::unique_ptr<websocketpp_client_base>(new websocketpp_client());
             return connect_impl<websocketpp::config::asio_client>();
         }
+    }
+
+    template <typename WebsocketConfigType>
+    void reconnect_handler(websocketpp::connection_hdl con_hdl)
+    {
+        auto &client = m_client->client<WebsocketConfigType>();
+
+        websocketpp::lib::error_code ec;
+        auto con = client.get_connection(utility::conversions::to_utf8string(m_uri.to_string()), ec);
+        m_con = con;
+
+        con->set_reconnect_handler(std::bind(&wspp_callback_client::reconnect_handler<WebsocketConfigType>, this, _1));
+
+        const auto & headers = m_config.headers();
+        for (const auto & header : headers)
+        {
+            if (!utility::details::str_icmp(header.first, g_subProtocolHeader))
+            {
+                con->append_header(utility::conversions::to_utf8string(header.first), utility::conversions::to_utf8string(header.second));
+            }
+        }
+
+        client.connect(con);
     }
 
     template <typename WebsocketConfigType>
@@ -287,6 +311,19 @@ public:
             shutdown_wspp_impl<WebsocketConfigType>(con_hdl, false);
         });
 
+        // Setup proxy options.
+        const auto &proxy = m_config.proxy();
+        if (proxy.is_specified())
+        {
+            client.set_proxy(utility::conversions::to_utf8string(proxy.address().to_string()));
+
+            const auto &cred = proxy.credentials();
+            if (cred.is_set())
+            {
+                client.set_proxy_basic_auth(utility::conversions::to_utf8string(cred.username()), utility::conversions::to_utf8string(*cred.decrypt()));
+            }
+        }
+
         // Get the connection handle to save for later, have to create temporary
         // because type erasure occurs with connection_hdl.
         websocketpp::lib::error_code ec;
@@ -321,29 +358,36 @@ public:
             }
         }
 
-        // Setup proxy options.
-        const auto &proxy = m_config.proxy();
-        if (proxy.is_specified())
-        {
-            con->set_proxy(utility::conversions::to_utf8string(proxy.address().to_string()), ec);
-            if (ec)
-            {
-                return pplx::task_from_exception<void>(websocket_exception(ec, build_error_msg(ec, "set_proxy")));
-            }
+        auto reconnectHandler = [this](websocketpp::connection_hdl con_hdl) {
+            auto &client = m_client->client<WebsocketConfigType>();
 
-            const auto &cred = proxy.credentials();
-            if (cred.is_set())
+            websocketpp::lib::error_code ec;
+            auto con = client.get_connection(utility::conversions::to_utf8string(m_uri.to_string()), ec);
+            m_con = con;
+
+            con->set_reconnect_handler([this](websocketpp::connection_hdl con_hdl) {
+                auto &client = m_client->client<WebsocketConfigType>();
+            
+                websocketpp::lib::error_code ec;
+                auto con = client.get_connection(utility::conversions::to_utf8string(m_uri.to_string()), ec);
+                m_con = con;
+            
+                client.connect(con);
+            });
+
+            const auto & headers = m_config.headers();
+            for (const auto & header : headers)
             {
-                con->set_proxy_basic_auth(
-                    utility::conversions::to_utf8string(cred.username()),
-                    utility::conversions::to_utf8string(*cred.decrypt()),
-                    ec);
-                if (ec)
+                if (!utility::details::str_icmp(header.first, g_subProtocolHeader))
                 {
-                    return pplx::task_from_exception<void>(websocket_exception(ec, build_error_msg(ec, "set_proxy_basic_auth")));
+                    con->append_header(utility::conversions::to_utf8string(header.first), utility::conversions::to_utf8string(header.second));
                 }
             }
-        }
+
+            client.connect(con);
+        };
+
+        con->set_reconnect_handler(std::bind(&wspp_callback_client::reconnect_handler<WebsocketConfigType>, this, _1));
 
         m_state = CONNECTING;
         client.connect(con);
@@ -501,7 +545,7 @@ public:
             websocketpp::lib::error_code ec;
             if (this_client->m_client->is_tls_client())
             {
-                this_client->send_msg_impl<websocketpp::config::asio_tls_client>(this_client, msg, sp_allocated, length, ec);
+                this_client->send_msg_impl<websocketpp::config::asio_tls_client_authenticated_proxy>(this_client, msg, sp_allocated, length, ec);
             }
             else
             {
@@ -569,7 +613,7 @@ public:
                 m_state = CLOSING;
                 if (m_client->is_tls_client())
                 {
-                    close_impl<websocketpp::config::asio_tls_client>(status, reason, ec);
+                    close_impl<websocketpp::config::asio_tls_client_authenticated_proxy>(status, reason, ec);
                 }
                 else
                 {
@@ -703,7 +747,7 @@ private:
         {
             throw std::bad_cast();
         }
-        virtual websocketpp::client<websocketpp::config::asio_tls_client> & tls_client()
+        virtual websocketpp::client<websocketpp::config::asio_tls_client_authenticated_proxy> & tls_client()
         {
             throw std::bad_cast();
         }
@@ -720,12 +764,12 @@ private:
     };
     struct websocketpp_tls_client : websocketpp_client_base
     {
-        websocketpp::client<websocketpp::config::asio_tls_client> & tls_client() override
+        websocketpp::client<websocketpp::config::asio_tls_client_authenticated_proxy> & tls_client() override
         {
             return m_client;
         }
         bool is_tls_client() const override { return true; }
-        websocketpp::client<websocketpp::config::asio_tls_client> m_client;
+        websocketpp::client<websocketpp::config::asio_tls_client_authenticated_proxy> m_client;
     };
 
     websocketpp::connection_hdl m_con;
