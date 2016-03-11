@@ -40,6 +40,7 @@
 #pragma GCC diagnostic ignored "-Wignored-qualifiers"
 #pragma GCC diagnostic ignored "-Wcast-qual"
 #include <websocketpp/config/asio_client.hpp>
+#include <websocketpp/config/asio_client_authenticated_proxy.hpp>
 #include <websocketpp/config/asio_no_tls_client.hpp>
 #include <websocketpp/client.hpp>
 #pragma GCC diagnostic pop
@@ -238,7 +239,7 @@ public:
         auto con = client.get_connection(utility::conversions::to_utf8string(m_uri.to_string()), ec);
         m_con = con;
 
-        con->set_reconnect_handler(std::bind(&wspp_callback_client::reconnect_handler<WebsocketConfigType>, this, _1));
+        con->set_reconnect_handler(std::bind(&wspp_callback_client::reconnect_handler<WebsocketConfigType>, this, std::placeholders::_1));
 
         const auto & headers = m_config.headers();
         for (const auto & header : headers)
@@ -358,36 +359,7 @@ public:
             }
         }
 
-        auto reconnectHandler = [this](websocketpp::connection_hdl con_hdl) {
-            auto &client = m_client->client<WebsocketConfigType>();
-
-            websocketpp::lib::error_code ec;
-            auto con = client.get_connection(utility::conversions::to_utf8string(m_uri.to_string()), ec);
-            m_con = con;
-
-            con->set_reconnect_handler([this](websocketpp::connection_hdl con_hdl) {
-                auto &client = m_client->client<WebsocketConfigType>();
-            
-                websocketpp::lib::error_code ec;
-                auto con = client.get_connection(utility::conversions::to_utf8string(m_uri.to_string()), ec);
-                m_con = con;
-            
-                client.connect(con);
-            });
-
-            const auto & headers = m_config.headers();
-            for (const auto & header : headers)
-            {
-                if (!utility::details::str_icmp(header.first, g_subProtocolHeader))
-                {
-                    con->append_header(utility::conversions::to_utf8string(header.first), utility::conversions::to_utf8string(header.second));
-                }
-            }
-
-            client.connect(con);
-        };
-
-        con->set_reconnect_handler(std::bind(&wspp_callback_client::reconnect_handler<WebsocketConfigType>, this, _1));
+        con->set_reconnect_handler(std::bind(&wspp_callback_client::reconnect_handler<WebsocketConfigType>, this, std::placeholders::_1));
 
         m_state = CONNECTING;
         client.connect(con);
