@@ -31,6 +31,8 @@
 #include <websocketpp/config/core_client.hpp>
 #include <websocketpp/transport/asio/endpoint.hpp>
 #include <websocketpp/transport/asio/security/tls.hpp>
+#include <websocketpp/http/proxy_authenticator.hpp>
+#include <websocketpp/common/security_context.hpp>
 
 // Pull in non-tls config
 #include <websocketpp/config/asio_no_tls_client.hpp>

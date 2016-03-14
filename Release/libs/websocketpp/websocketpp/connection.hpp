@@ -285,9 +285,6 @@ public:
     typedef typename config::con_msg_manager_type con_msg_manager_type;
     typedef typename con_msg_manager_type::ptr con_msg_manager_ptr;
 
-    typedef typename config::proxy_authenticator_type proxy_authenticator_type;
-    typedef typename proxy_authenticator_type::ptr proxy_authenticator_ptr;
-
     /// Type of RNG
     typedef typename config::rng_type rng_type;
 
@@ -304,13 +301,13 @@ public:
     typedef session::internal_state::value istate_type;
 
     // Reconnect handler (Signalled if we require a reconnection)
-    typedef lib::function<void(connection_hdl)> reconnect_handler;
+    typedef lib::function<void(websocketpp::connection_hdl)> reconnect_handler;
 
 private:
     enum terminate_status {
         failed = 1,
         closed,
-        proxy_reconnect, // may not need this!
+        proxy_reconnect,
         unknown
     };
 public:
@@ -351,6 +348,43 @@ public:
       , m_was_clean(false)
     {
         m_alog.write(log::alevel::devel,"connection constructor");
+    }
+
+    explicit connection(const connection& prev_con)
+        : transport_con_type(prev_con)
+        , m_handle_read_frame(lib::bind(
+            &type::handle_read_frame,
+            this,
+            lib::placeholders::_1,
+            lib::placeholders::_2
+            ))
+        , m_write_frame_handler(lib::bind(
+            &type::handle_write_frame,
+            this,
+            lib::placeholders::_1
+            ))
+        , m_user_agent(prev_con.m_user_agent)
+        , m_open_handshake_timeout_dur(config::timeout_open_handshake)
+        , m_close_handshake_timeout_dur(config::timeout_close_handshake)
+        , m_pong_timeout_dur(config::timeout_pong)
+        , m_max_message_size(config::max_message_size)
+        , m_state(session::state::connecting)
+        , m_internal_state(session::internal_state::USER_INIT)
+        , m_msg_manager(new con_msg_manager_type())
+        , m_send_buffer_size(0)
+        , m_write_flag(false)
+        , m_read_flag(true)
+        , m_is_server(prev_con.m_is_server)
+        , m_alog(prev_con.m_alog)
+        , m_elog(prev_con.m_elog)
+        , m_rng(prev_con.m_rng)
+        , m_local_close_code(close::status::abnormal_close)
+        , m_remote_close_code(close::status::abnormal_close)
+        , m_is_http(false)
+        , m_http_state(session::http_state::init)
+        , m_was_clean(false)
+    {
+        m_alog.write(log::alevel::devel, "connection copy constructor");
     }
 
     /// Get a shared pointer to this component
@@ -497,12 +531,6 @@ public:
 
     void set_reconnect_handler(reconnect_handler h) {
         m_reconnect_handler = h;
-    }
-
-    void set_proxy_authenticator(proxy_authenticator_ptr a) {
-        m_proxy_authenticator = a;
-
-        config::transport_type::transport_con_type::set_proxy_authenticator(a);
     }
 
     //////////////////////////////////////////
@@ -1629,7 +1657,6 @@ private:
     response_type           m_response;
     uri_ptr                 m_uri;
     std::string             m_subprotocol;
-    proxy_authenticator_ptr m_proxy_authenticator;
 
     // connection data that might not be necessary to keep around for the life
     // of the whole connection.

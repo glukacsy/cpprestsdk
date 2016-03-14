@@ -28,13 +28,17 @@
 #ifndef WEBSOCKETPP_COMMON_SECURITY_CONTEXT_HPP
 #define WEBSOCKETPP_COMMON_SECURITY_CONTEXT_HPP
 
+#include <websocketpp/common/memory.hpp>
+
+#include <string>
+
 namespace websocketpp {
     namespace lib {
         namespace security {
             class SecurityContext
             {
             public:
-                typedef std::shared_ptr<SecurityContext> Ptr;
+                typedef lib::shared_ptr<SecurityContext> Ptr;
 
                 static Ptr build(const std::string& , const std::string& )  { return  Ptr(); }
 
