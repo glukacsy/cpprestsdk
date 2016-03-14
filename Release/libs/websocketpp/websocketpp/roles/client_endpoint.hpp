@@ -67,8 +67,6 @@ public:
     /// Type of the endpoint component of this server
     typedef endpoint<connection_type,config> endpoint_type;
 
-    typedef typename config::proxy_authenticator_type proxy_authenticator_type;
-
     friend class connection<config>;
 
     explicit client() : endpoint_type(false)
@@ -106,6 +104,22 @@ public:
         ec = lib::error_code();
         return con;
     }
+
+    connection_ptr get_reconnection(connection_ptr prev_con, lib::error_code & ec) {
+
+        connection_ptr con = endpoint_type::create_connection(prev_con);
+
+        if (!con) {
+            ec = error::make_error_code(error::con_creation_failed);
+            return con;
+        }
+
+        con->set_uri(prev_con->get_uri()); 
+
+        ec = lib::error_code();
+        return con;
+    }
+
 
     /// Get a new connection (string version)
     /**

@@ -76,11 +76,7 @@ public:
     typedef typename concurrency_type::mutex_type mutex_type;
 
     typedef lib::shared_ptr<timer> timer_ptr;
-    
-    /// Type of proxy authentication policy
-    typedef typename config::proxy_authenticator_type proxy_authenticator_type;
-    typedef typename proxy_authenticator_type::ptr proxy_authenticator_ptr;
-    
+
     explicit connection(bool is_server, alog_type & alog, elog_type & elog)
       : m_output_stream(NULL)
       , m_reading(false)
@@ -92,17 +88,24 @@ public:
     {
         m_alog.write(log::alevel::devel,"iostream con transport constructor");
     }
-
+    
+    // Note: Only including this copy constructor to address a build break
+    // build a new connection object from an existing one
+    explicit connection(const connection& con)
+      : m_output_stream(NULL)
+      , m_reading(con.m_reading)
+      , m_is_server(con.m_is_server)
+      , m_is_secure(con.m_is_secure)
+      , m_alog(con.m_alog)
+      , m_elog(con.m_elog)
+      , m_remote_endpoint("iostream transport")
+    {
+    }
+    
     /// Get a shared pointer to this component
     ptr get_shared() {
         return type::shared_from_this();
     }
-    
-    //
-    // To Do: Remove this - only adding to fix a build break. 
-    //
-    void set_proxy_authenticator(proxy_authenticator_ptr p) {
-    }    
 
     /// Register a std::ostream with the transport for writing output
     /**

@@ -44,10 +44,6 @@
 #include <websocketpp/http/request.hpp>
 #include <websocketpp/http/response.hpp>
 
-// Proxy Authentication
-#include <websocketpp/common/security_context.hpp>
-#include <websocketpp/http/proxy_authenticator.hpp>
-
 // Messages
 #include <websocketpp/message_buffer/message.hpp>
 #include <websocketpp/message_buffer/alloc.hpp>
@@ -64,6 +60,10 @@
 
 // Extensions
 #include <websocketpp/extensions/permessage_deflate/disabled.hpp>
+
+// Proxy Authentication Policy
+#include <websocketpp/common/security_context.hpp>
+#include <websocketpp/http/proxy_authenticator.hpp>
 
 namespace websocketpp {
 namespace config {
@@ -96,11 +96,13 @@ struct debug_core {
     /// RNG policies
     typedef websocketpp::random::none::int_generator<uint32_t> rng_type;
     
-    /// Proxy Authenticator policy
-    typedef websocketpp::lib::security::SecurityContext security_context;
-    typedef http::proxy::proxy_authenticator<security_context> proxy_authenticator_type;      
+    /// Proxy Authentication Policy
+    typedef websocketpp::lib::security::SecurityContext security_context_type;
+    typedef websocketpp::http::proxy::proxy_authenticator<security_context_type> proxy_authenticator_type;
 
     /// Controls compile time enabling/disabling of thread syncronization
+    /// code Disabling can provide a minor performance improvement to single
+    /// threaded applications
     static bool const enable_multithreading = true;
 
     struct transport_config {

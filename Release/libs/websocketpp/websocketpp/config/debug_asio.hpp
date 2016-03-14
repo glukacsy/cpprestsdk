@@ -59,7 +59,7 @@ struct debug_asio_tls : public debug_core {
     typedef base::rng_type rng_type;
 
     typedef base::proxy_authenticator_type proxy_authenticator_type;
-    
+
     struct transport_config : public base::transport_config {
         typedef type::concurrency_type concurrency_type;
         typedef type::alog_type alog_type;

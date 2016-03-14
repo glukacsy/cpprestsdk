@@ -88,9 +88,6 @@ public:
     // TODO: organize these
     typedef typename connection_type::termination_handler termination_handler;
 
-    typedef typename config::proxy_authenticator_type proxy_authenticator_type;
-    typedef typename config::proxy_authenticator_type::ptr proxy_authenticator_type_ptr;
-
     // This would be ideal. Requires C++11 though
     //friend connection;
 
@@ -478,16 +475,6 @@ public:
         m_max_http_body_size = new_value;
     }
 
-    void set_proxy(const std::string& proxy) {
-        m_proxy_authenticator = lib::make_shared<proxy_authenticator_type>(proxy);
-    }
-
-    void set_proxy_basic_auth(std::string const& username, std::string const& password) {
-        if (m_proxy_authenticator) {
-            m_proxy_authenticator->set_basic_auth(username, password);
-        }
-    }
-
     /*************************************/
     /* Connection pass through functions */
     /*************************************/
@@ -680,7 +667,7 @@ public:
         return con;
     }
 protected:
-    connection_ptr create_connection();
+    connection_ptr create_connection(connection_ptr previous_con = connection_ptr());
 
     alog_type m_alog;
     elog_type m_elog;
@@ -705,8 +692,6 @@ private:
     long                        m_pong_timeout_dur;
     size_t                      m_max_message_size;
     size_t                      m_max_http_body_size;
-
-    proxy_authenticator_type_ptr  m_proxy_authenticator;
 
     rng_type m_rng;
 
