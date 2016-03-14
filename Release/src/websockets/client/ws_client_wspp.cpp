@@ -40,6 +40,7 @@
 #pragma GCC diagnostic ignored "-Wignored-qualifiers"
 #pragma GCC diagnostic ignored "-Wcast-qual"
 #include <websocketpp/config/asio_client.hpp>
+#include <websocketpp/config/asio_client_authenticated_proxy.hpp>
 #include <websocketpp/config/asio_no_tls_client.hpp>
 #include <websocketpp/client.hpp>
 #pragma GCC diagnostic pop
@@ -248,7 +249,7 @@ public:
 
         // Note: No need to set proxy options, client.get_reconnection() preserves proxy state
         
-        con->set_reconnect_handler(std::bind(&wspp_callback_client::reconnect_handler<WebsocketConfigType>, this, _1));
+        con->set_reconnect_handler(std::bind(&wspp_callback_client::reconnect_handler<WebsocketConfigType>, this, websocketpp::lib::placeholders::_1));
         
         const auto & headers = m_config.headers();
         for (const auto & header : headers)
@@ -368,7 +369,7 @@ public:
             }
         }
 
-        con->set_reconnect_handler(std::bind(&wspp_callback_client::reconnect_handler<WebsocketConfigType>, this, _1));
+        con->set_reconnect_handler(std::bind(&wspp_callback_client::reconnect_handler<WebsocketConfigType>, this, websocketpp::lib::placeholders::_1));
 
         m_state = CONNECTING;
         client.connect(con);
