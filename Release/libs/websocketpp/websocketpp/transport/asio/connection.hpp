@@ -846,7 +846,10 @@ protected:
 
             if (m_proxy_data->proxy_authenticator) {
                 if (m_proxy_data->res.get_status_code() == http::status_code::ok) {
-                    m_proxy_data->proxy_authenticator->set_authenticated();
+                    if (!m_proxy_data->proxy_authenticator->set_authenticated())
+                    {
+                        reconnect = true;
+                    }
                 }
 
                 if (reconnect) {
