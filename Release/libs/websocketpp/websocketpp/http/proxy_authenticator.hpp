@@ -140,10 +140,8 @@ namespace websocketpp {
                 * Marks this authenticator as complete, which means 'get_authenticated_token()
                 * returns the valid token for proxy authentication. 
                 */
-                bool set_authenticated() {
-                    bool result = authenticated;
+                void set_authenticated() {
                     authenticated = true;
-                    return result;
                 }
 
                 /// Returns the authenticated token after auth complete
