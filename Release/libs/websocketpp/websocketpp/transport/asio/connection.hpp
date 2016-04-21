@@ -45,6 +45,7 @@
 #include <websocketpp/common/memory.hpp>
 #include <websocketpp/common/functional.hpp>
 #include <websocketpp/common/connection_hdl.hpp>
+#include <websocketpp/common/string_utils.hpp>
 
 #include <istream>
 #include <sstream>
@@ -102,12 +103,12 @@ public:
     friend class endpoint<config>;
 
     // generate and manage our own io_service
-    explicit connection(bool is_server, alog_type & alog, elog_type & elog)
+    explicit connection(bool is_server, const lib::shared_ptr<alog_type> & alog, const lib::shared_ptr<elog_type> & elog)
       : m_is_server(is_server)
       , m_alog(alog)
       , m_elog(elog)
     {
-        m_alog.write(log::alevel::devel,"asio con transport constructor");
+        m_alog->write(log::alevel::devel,"asio con transport constructor");
     }
 
     // build a new connection object from an existing one
@@ -118,7 +119,7 @@ public:
         , m_proxy(con.m_proxy)
         , m_proxy_data(con.m_proxy_data)
     {
-        m_alog.write(log::alevel::devel, "asio con transport constructor");
+        m_alog->write(log::alevel::devel, "asio con transport constructor");
     }
 
     /// Get a shared pointer to this component
@@ -305,7 +306,7 @@ public:
         std::string ret = socket_con_type::get_remote_endpoint(ec);
 
         if (ec) {
-            m_elog.write(log::elevel::info,ret);
+            m_elog->write(log::elevel::info,ret);
             return "Unknown";
         } else {
             return ret;
@@ -429,8 +430,8 @@ public:
      */
 protected:
     void init(init_handler callback) {
-        if (m_alog.static_test(log::alevel::devel)) {
-            m_alog.write(log::alevel::devel,"asio connection init");
+        if (m_alog->static_test(log::alevel::devel)) {
+            m_alog->write(log::alevel::devel,"asio connection init");
         }
 
         // TODO: pre-init timeout. Right now no implemented socket policies
@@ -503,8 +504,8 @@ protected:
     }
 
     void handle_pre_init(init_handler callback, lib::error_code const & ec) {
-        if (m_alog.static_test(log::alevel::devel)) {
-            m_alog.write(log::alevel::devel,"asio connection handle pre_init");
+        if (m_alog->static_test(log::alevel::devel)) {
+            m_alog->write(log::alevel::devel,"asio connection handle pre_init");
         }
 
         if (m_tcp_pre_init_handler) {
@@ -525,8 +526,8 @@ protected:
     }
 
     void post_init(init_handler callback) {
-        if (m_alog.static_test(log::alevel::devel)) {
-            m_alog.write(log::alevel::devel,"asio connection post_init");
+        if (m_alog->static_test(log::alevel::devel)) {
+            m_alog->write(log::alevel::devel,"asio connection post_init");
         }
 
         timer_ptr post_timer;
@@ -571,7 +572,7 @@ protected:
 
         if (ec) {
             if (ec == transport::error::operation_aborted) {
-                m_alog.write(log::alevel::devel,
+                m_alog->write(log::alevel::devel,
                     "asio post init timer cancelled");
                 return;
             }
@@ -586,7 +587,7 @@ protected:
             }
         }
 
-        m_alog.write(log::alevel::devel, "Asio transport post-init timed out");
+        m_alog->write(log::alevel::devel, "Asio transport post-init timed out");
         cancel_socket_checked();
         callback(ret_ec);
     }
@@ -606,7 +607,7 @@ protected:
         if (ec == transport::error::operation_aborted ||
             (post_timer && lib::asio::is_neg(post_timer->expires_from_now())))
         {
-            m_alog.write(log::alevel::devel,"post_init cancelled");
+            m_alog->write(log::alevel::devel,"post_init cancelled");
             return;
         }
 
@@ -614,8 +615,8 @@ protected:
             post_timer->cancel();
         }
 
-        if (m_alog.static_test(log::alevel::devel)) {
-            m_alog.write(log::alevel::devel,"asio connection handle_post_init");
+        if (m_alog->static_test(log::alevel::devel)) {
+            m_alog->write(log::alevel::devel,"asio connection handle_post_init");
         }
 
         if (m_tcp_post_init_handler) {
@@ -626,12 +627,12 @@ protected:
     }
 
     void proxy_write(init_handler callback) {
-        if (m_alog.static_test(log::alevel::devel)) {
-            m_alog.write(log::alevel::devel,"asio connection proxy_write");
+        if (m_alog->static_test(log::alevel::devel)) {
+            m_alog->write(log::alevel::devel,"asio connection proxy_write");
         }
 
         if (!m_proxy_data) {
-            m_elog.write(log::elevel::library,
+            m_elog->write(log::elevel::library,
                 "assertion failed: !m_proxy_data in asio::connection::proxy_write");
             callback(make_error_code(error::general));
             return;
@@ -642,7 +643,7 @@ protected:
         m_bufs.push_back(lib::asio::buffer(m_proxy_data->write_buf.data(),
                                            m_proxy_data->write_buf.size()));
 
-        m_alog.write(log::alevel::devel,m_proxy_data->write_buf);
+        m_alog->write(log::alevel::devel,m_proxy_data->write_buf);
 
         // Set a timer so we don't wait forever for the proxy to respond
         m_proxy_data->timer = this->set_timer(
@@ -682,14 +683,14 @@ protected:
     void handle_proxy_timeout(init_handler callback, lib::error_code const & ec)
     {
         if (ec == transport::error::operation_aborted) {
-            m_alog.write(log::alevel::devel,
+            m_alog->write(log::alevel::devel,
                 "asio handle_proxy_write timer cancelled");
             return;
         } else if (ec) {
             log_err(log::elevel::devel,"asio handle_proxy_write",ec);
             callback(ec);
         } else {
-            m_alog.write(log::alevel::devel,
+            m_alog->write(log::alevel::devel,
                 "asio handle_proxy_write timer expired");
             cancel_socket_checked();
             callback(make_error_code(transport::error::timeout));
@@ -699,8 +700,8 @@ protected:
     void handle_proxy_write(init_handler callback,
         lib::asio::error_code const & ec)
     {
-        if (m_alog.static_test(log::alevel::devel)) {
-            m_alog.write(log::alevel::devel,
+        if (m_alog->static_test(log::alevel::devel)) {
+            m_alog->write(log::alevel::devel,
                 "asio connection handle_proxy_write");
         }
 
@@ -712,7 +713,7 @@ protected:
         if (ec == lib::asio::error::operation_aborted ||
             lib::asio::is_neg(m_proxy_data->timer->expires_from_now()))
         {
-            m_elog.write(log::elevel::devel,"write operation aborted");
+            m_elog->write(log::elevel::devel,"write operation aborted");
             return;
         }
 
@@ -727,12 +728,12 @@ protected:
     }
 
     void proxy_read(init_handler callback) {
-        if (m_alog.static_test(log::alevel::devel)) {
-            m_alog.write(log::alevel::devel,"asio connection proxy_read");
+        if (m_alog->static_test(log::alevel::devel)) {
+            m_alog->write(log::alevel::devel,"asio connection proxy_read");
         }
 
         if (!m_proxy_data) {
-            m_elog.write(log::elevel::library,
+            m_elog->write(log::elevel::library,
                 "assertion failed: !m_proxy_data in asio::connection::proxy_read");
             m_proxy_data->timer->cancel();
             callback(make_error_code(error::general));
@@ -764,6 +765,48 @@ protected:
         }
     }
 
+    size_t proxy_read_body_completion(size_t to_read, lib::asio::error_code const & /*ec*/, size_t transferred)
+    {
+        size_t result = 512; // istream_buffer;
+
+        if (transferred >= to_read) {
+            result = 0;
+        }
+
+        return result;
+    }
+
+    void proxy_read_body(init_handler callback) {
+        if (m_alog->static_test(log::alevel::devel)) {
+            m_alog->write(log::alevel::devel, "asio connection proxy_read_body");
+        }
+
+        if (!m_proxy_data) {
+            m_elog->write(log::elevel::library,
+                "assertion failed: !m_proxy_data in asio::connection::proxy_read_body");
+            m_proxy_data->timer->cancel();
+            callback(make_error_code(error::general));
+            return;
+        }
+
+        size_t to_read = m_proxy_data->res.get_content_length();
+
+        lib::asio::async_read(
+            socket_con_type::get_next_layer(),
+            m_proxy_data->read_buf,
+            lib::bind(
+                &type::proxy_read_body_completion, get_shared(), 
+                to_read,
+                lib::placeholders::_1, lib::placeholders::_2
+                ),
+            m_strand->wrap(lib::bind(
+                &type::handle_proxy_read, get_shared(),
+                callback,
+                lib::placeholders::_1, lib::placeholders::_2
+                ))
+            );
+    }
+
     /// Proxy read callback
     /**
      * @param init_handler The function to call back
@@ -773,8 +816,8 @@ protected:
     void handle_proxy_read(init_handler callback,
         lib::asio::error_code const & ec, size_t)
     {
-        if (m_alog.static_test(log::alevel::devel)) {
-            m_alog.write(log::alevel::devel,
+        if (m_alog->static_test(log::alevel::devel)) {
+            m_alog->write(log::alevel::devel,
                 "asio connection handle_proxy_read");
         }
 
@@ -784,7 +827,7 @@ protected:
         if (ec == lib::asio::error::operation_aborted ||
             lib::asio::is_neg(m_proxy_data->timer->expires_from_now()))
         {
-            m_elog.write(log::elevel::devel,"read operation aborted");
+            m_elog->write(log::elevel::devel,"read operation aborted");
             return;
         }
 
@@ -792,12 +835,12 @@ protected:
         m_proxy_data->timer->cancel();
 
         if (ec) {
-            m_elog.write(log::elevel::info,
+            m_elog->write(log::elevel::info,
                 "asio handle_proxy_read error: "+ec.message());
             callback(make_error_code(error::pass_through));
         } else {
             if (!m_proxy_data) {
-                m_elog.write(log::elevel::library,
+                m_elog->write(log::elevel::library,
                     "assertion failed: !m_proxy_data in asio::connection::handle_proxy_read");
                 callback(make_error_code(error::general));
                 return;
@@ -814,18 +857,24 @@ protected:
                 return;
             }
 
-            m_alog.write(log::alevel::devel,m_proxy_data->res.raw());
+            if (m_proxy_data->res.get_content_length() > 0 && !m_proxy_data->res.ready())
+            {
+                proxy_read_body(callback);
+                return;
+            }
+
+            m_alog->write(log::alevel::devel,m_proxy_data->res.raw());
 
             bool reconnect = false;
 
             std::string connection_header = m_proxy_data->res.get_header("Connection");
 
-            if (connection_header == "Close") {
+            if (websocketpp::lib::string_utils::icompare(connection_header, "Close")) {
                 reconnect = true;
             }
 
             if (m_proxy_data->res.get_status_code() == http::status_code::proxy_authentication_required) {
-                m_elog.write(log::elevel::info, "Proxy authorization Required");
+                m_elog->write(log::elevel::info, "Proxy authorization Required");
 
                 std::string auth_headers = m_proxy_data->res.get_header("Proxy-Authenticate");
 
@@ -867,7 +916,7 @@ protected:
                   << " ("
                   << m_proxy_data->res.get_status_msg()
                   << ")";
-                m_elog.write(log::elevel::info,s.str());
+                m_elog->write(log::elevel::info,s.str());
                 callback(make_error_code(error::proxy_failed));
                 return;
             }
@@ -892,16 +941,16 @@ protected:
     void async_read_at_least(size_t num_bytes, char *buf, size_t len,
         read_handler handler)
     {
-        if (m_alog.static_test(log::alevel::devel)) {
+        if (m_alog->static_test(log::alevel::devel)) {
             std::stringstream s;
             s << "asio async_read_at_least: " << num_bytes;
-            m_alog.write(log::alevel::devel,s.str());
+            m_alog->write(log::alevel::devel,s.str());
         }
 
         // TODO: safety vs speed ?
         // maybe move into an if devel block
         /*if (num_bytes > len) {
-            m_elog.write(log::elevel::devel,
+            m_elog->write(log::elevel::devel,
                 "asio async_read_at_least error::invalid_num_bytes");
             handler(make_error_code(transport::error::invalid_num_bytes),
                 size_t(0));
@@ -943,7 +992,7 @@ protected:
     void handle_async_read(read_handler handler, lib::asio::error_code const & ec,
         size_t bytes_transferred)
     {
-        m_alog.write(log::alevel::devel, "asio con handle_async_read");
+        m_alog->write(log::alevel::devel, "asio con handle_async_read");
 
         // translate asio error codes into more lib::error_codes
         lib::error_code tec;
@@ -969,7 +1018,7 @@ protected:
         } else {
             // This can happen in cases where the connection is terminated while
             // the transport is waiting on a read.
-            m_alog.write(log::alevel::devel,
+            m_alog->write(log::alevel::devel,
                 "handle_async_read called with null read handler");
         }
     }
@@ -1061,7 +1110,7 @@ protected:
         } else {
             // This can happen in cases where the connection is terminated while
             // the transport is waiting on a read.
-            m_alog.write(log::alevel::devel,
+            m_alog->write(log::alevel::devel,
                 "handle_async_write called with null write handler");
         }
     }
@@ -1106,8 +1155,8 @@ protected:
 
     /// close and clean up the underlying socket
     void async_shutdown(shutdown_handler callback) {
-        if (m_alog.static_test(log::alevel::devel)) {
-            m_alog.write(log::alevel::devel,"asio connection async_shutdown");
+        if (m_alog->static_test(log::alevel::devel)) {
+            m_alog->write(log::alevel::devel,"asio connection async_shutdown");
         }
 
         timer_ptr shutdown_timer;
@@ -1146,7 +1195,7 @@ protected:
 
         if (ec) {
             if (ec == transport::error::operation_aborted) {
-                m_alog.write(log::alevel::devel,
+                m_alog->write(log::alevel::devel,
                     "asio socket shutdown timer cancelled");
                 return;
             }
@@ -1157,7 +1206,7 @@ protected:
             ret_ec = make_error_code(transport::error::timeout);
         }
 
-        m_alog.write(log::alevel::devel,
+        m_alog->write(log::alevel::devel,
             "Asio transport socket shutdown timed out");
         cancel_socket_checked();
         callback(ret_ec);
@@ -1169,7 +1218,7 @@ protected:
         if (ec == lib::asio::error::operation_aborted ||
             lib::asio::is_neg(shutdown_timer->expires_from_now()))
         {
-            m_alog.write(log::alevel::devel,"async_shutdown cancelled");
+            m_alog->write(log::alevel::devel,"async_shutdown cancelled");
             return;
         }
 
@@ -1201,8 +1250,8 @@ protected:
                 }
             }
         } else {
-            if (m_alog.static_test(log::alevel::devel)) {
-                m_alog.write(log::alevel::devel,
+            if (m_alog->static_test(log::alevel::devel)) {
+                m_alog->write(log::alevel::devel,
                     "asio con handle_async_shutdown");
             }
         }
@@ -1215,7 +1264,7 @@ protected:
         if (cec) {
             if (cec == lib::asio::error::operation_not_supported) {
                 // cancel not supported on this OS, ignore and log at dev level
-                m_alog.write(log::alevel::devel, "socket cancel not supported");
+                m_alog->write(log::alevel::devel, "socket cancel not supported");
             } else {
                 log_err(log::elevel::warn, "socket cancel failed", cec);
             }
@@ -1228,13 +1277,13 @@ private:
     void log_err(log::level l, const char * msg, const error_type & ec) {
         std::stringstream s;
         s << msg << " error: " << ec << " (" << ec.message() << ")";
-        m_elog.write(l,s.str());
+        m_elog->write(l,s.str());
     }
 
     // static settings
     const bool m_is_server;
-    alog_type& m_alog;
-    elog_type& m_elog;
+    lib::shared_ptr<alog_type> m_alog;
+    lib::shared_ptr<elog_type> m_elog;
 
     struct proxy_data {
         proxy_data() : timeout_proxy(config::timeout_proxy) {}
