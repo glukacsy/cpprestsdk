@@ -60,6 +60,8 @@
 #include <websocketpp/config/asio_no_tls_client.hpp>
 #include <websocketpp/client.hpp>
 
+#include <websocketpp/logger/levels.hpp>
+
 #if defined(_WIN32)
 #pragma warning( pop )
 #endif
@@ -70,12 +72,74 @@ using websocketpp::lib::placeholders::_1;
 using websocketpp::lib::placeholders::_2;
 using websocketpp::lib::bind;
 
+template <typename concurrency, typename names>
+class Logger;
+
+struct logging_client : public websocketpp::config::asio_tls_client_authenticated_proxy
+{
+    typedef Logger<websocketpp::concurrency::basic, websocketpp::log::alevel> alog_type;
+    typedef Logger<websocketpp::concurrency::basic, websocketpp::log::elevel> elog_type;
+
+    static const websocketpp::log::level alog_level = websocketpp::log::alevel::all;
+};
+
+class dbgview_buffer : public std::stringbuf
+{
+public:
+    ~dbgview_buffer()
+    {
+        sync(); // can be avoided
+    }
+
+    int sync()
+    {
+        if (m_logger_func) {
+            m_logger_func(str());
+        }
+
+        str("");
+        return 0;
+    }
+
+    static web::websockets::client::logger_func_type m_logger_func;
+};
+
+web::websockets::client::logger_func_type dbgview_buffer::m_logger_func = nullptr;
+
+template <typename concurrency, typename names>
+class Logger : public websocketpp::log::basic<concurrency,names>{
+public:
+    Logger<concurrency, names>(websocketpp::log::channel_type_hint::value h =
+        websocketpp::log::channel_type_hint::access) : websocketpp::log::basic<concurrency, names>(h),
+        m_ostream(&m_buf)
+    {
+        websocketpp::log::basic<concurrency, names>::set_channels(websocketpp::log::alevel::all);
+        websocketpp::log::basic<concurrency, names>::set_ostream(&m_ostream);
+    }
+    Logger<concurrency, names>(websocketpp::log::level c, websocketpp::log::channel_type_hint::value h = websocketpp::log::channel_type_hint::access) : 
+        websocketpp::log::basic<concurrency, names>(c, h),
+        m_ostream(&m_buf)
+    {
+        websocketpp::log::basic<concurrency, names>::set_channels(websocketpp::log::alevel::all);
+        websocketpp::log::basic<concurrency, names>::set_ostream(&m_ostream);
+    }
+
+private:
+    std::ostream m_ostream;
+    dbgview_buffer m_buf;
+};
+
 namespace web
 {
 namespace websockets
 {
 namespace client
 {
+
+_ASYNCRTIMP void set_logger(web::websockets::client::logger_func_type logger_func) {
+   dbgview_buffer::m_logger_func = logger_func;
+}
+
 namespace details
 {
 
@@ -158,7 +222,8 @@ public:
             m_client = std::unique_ptr<websocketpp_client_base>(new websocketpp_tls_client());
 
             // Options specific to TLS client.
-            auto &client = m_client->client<websocketpp::config::asio_tls_client_authenticated_proxy>();
+            auto &client = m_client->client<logging_client>();
+            
             client.set_tls_init_handler([this](websocketpp::connection_hdl)
             {
                 auto sslContext = websocketpp::lib::shared_ptr<boost::asio::ssl::context>(new boost::asio::ssl::context(boost::asio::ssl::context::sslv23));
@@ -221,7 +286,7 @@ public:
                 }
             });
 
-            return connect_impl<websocketpp::config::asio_tls_client_authenticated_proxy, websocketpp_tls_client>();
+            return connect_impl<logging_client, websocketpp_tls_client>();
         }
         else
         {
@@ -268,8 +333,8 @@ public:
     {
         auto &client = m_client->client<WebsocketConfigType>();
 
-        client.clear_access_channels(websocketpp::log::alevel::all);
-        client.clear_error_channels(websocketpp::log::alevel::all);
+        //client.clear_access_channels(websocketpp::log::alevel::all);
+        //client.clear_error_channels(websocketpp::log::alevel::all);
         client.init_asio();
         client.start_perpetual();
 
@@ -527,7 +592,7 @@ public:
             websocketpp::lib::error_code ec;
             if (this_client->m_client->is_tls_client())
             {
-                this_client->send_msg_impl<websocketpp::config::asio_tls_client_authenticated_proxy>(this_client, msg, sp_allocated, length, ec);
+                this_client->send_msg_impl<logging_client>(this_client, msg, sp_allocated, length, ec);
             }
             else
             {
@@ -595,7 +660,7 @@ public:
                 m_state = CLOSING;
                 if (m_client->is_tls_client())
                 {
-                    close_impl<websocketpp::config::asio_tls_client_authenticated_proxy>(status, reason, ec);
+                    close_impl<logging_client>(status, reason, ec);
                 }
                 else
                 {
@@ -729,7 +794,7 @@ private:
         {
             throw std::bad_cast();
         }
-        virtual websocketpp::client<websocketpp::config::asio_tls_client_authenticated_proxy> & tls_client()
+        virtual websocketpp::client<logging_client> & tls_client()
         {
             throw std::bad_cast();
         }
@@ -748,14 +813,14 @@ private:
     };
     struct websocketpp_tls_client : websocketpp_client_base
     {
-        websocketpp::client<websocketpp::config::asio_tls_client_authenticated_proxy> & tls_client() override
+        websocketpp::client<logging_client> & tls_client() override
         {
             return m_client;
         }
         bool is_tls_client() const override { return true; }
-        websocketpp::client<websocketpp::config::asio_tls_client_authenticated_proxy> m_client;
+        websocketpp::client<logging_client> m_client;
 
-        typedef websocketpp::client<websocketpp::config::asio_tls_client_authenticated_proxy>::connection_ptr connection_ptr;
+        typedef websocketpp::client<logging_client>::connection_ptr connection_ptr;
     };
 
     websocketpp::connection_hdl m_con;

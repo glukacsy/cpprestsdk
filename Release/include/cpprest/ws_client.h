@@ -620,6 +620,14 @@ private:
     std::shared_ptr<details::websocket_client_callback_impl> m_client;
 };
 
+/// <summary>
+/// Sets a logger method for logging WebSockets
+/// </summary>
+/// <remarks>Should only be used when debugging websocket connections</remarks>
+typedef std::function<void(const std::string&)> logger_func_type;
+
+_ASYNCRTIMP void set_logger(logger_func_type logger_func);
+
 }}}
 
 #endif
