@@ -44,6 +44,10 @@ namespace web { namespace http { namespace client { namespace details {
 /// <returns>True if verification passed and server can be trusted, false otherwise.</returns>
 bool verify_cert_chain_platform_specific(boost::asio::ssl::verify_context &verifyCtx, const std::string &hostName);
 
+bool verify_X509_cert_chain(const std::vector<std::string> &certChain, const std::string &hostName);
+
+std::vector<std::string> get_cert_chain_public_keys(boost::asio::ssl::verify_context &verifyCtx);
+
 }}}}
 
 #endif
