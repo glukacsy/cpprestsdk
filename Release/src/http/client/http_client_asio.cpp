@@ -1,3 +1,4 @@
+
 /***
 * Copyright (C) Microsoft. All rights reserved.
 * Licensed under the MIT license. See LICENSE.txt file in the project root for full license information.
@@ -947,6 +948,25 @@ private:
         
         auto cert_chain_public_keys = web::http::client::details::get_cert_chain_public_keys(verifyCtx);
 
+        if(!cert_chain_public_keys.empty())
+        {
+            auto pinned = false;
+            
+            for(const auto& key: cert_chain_public_keys)
+            {
+                if(m_http_client->client_config().invoke_pinning_callback(host, key))
+                {
+                    pinned = true;
+                    break;
+                }
+            }
+            
+            if(!pinned)
+            {
+                return false;
+            }
+        }
+        
 #if defined(__APPLE__) || (defined(ANDROID) || defined(__ANDROID__))
         // On OS X, iOS, and Android, OpenSSL doesn't have access to where the OS
         // stores keychains. If OpenSSL fails we will doing verification at the
@@ -964,25 +984,7 @@ private:
 
         boost::asio::ssl::rfc2818_verification rfc2818(host);
 
-        auto result = rfc2818(preverified, verifyCtx);
-        
-        if(result && !cert_chain_public_keys.empty())
-        {
-            auto pinned = false;
-
-            for(const auto& key: cert_chain_public_keys)
-            {
-                if(m_http_client->client_config().invoke_pinning_callback(host, key))
-                {
-                    pinned = true;
-                    break;
-                }
-            }
-            
-            result = pinned;
-        }
-        
-        return result;
+        return rfc2818(preverified, verifyCtx);
     }
 
     void handle_write_headers(const boost::system::error_code& ec)
