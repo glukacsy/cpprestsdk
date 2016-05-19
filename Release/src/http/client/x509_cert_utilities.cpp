@@ -27,6 +27,8 @@
 
 #include "cpprest/details/x509_cert_utilities.h"
 
+#include <iomanip>
+
 namespace web { namespace http { namespace client { namespace details {
 
 #if defined(__APPLE__) || (defined(ANDROID) || defined(__ANDROID__)) || (defined(_WIN32)  && !defined(__cplusplus_winrt) && !defined(_M_ARM) && !defined(CPPREST_EXCLUDE_WEBSOCKETS))
@@ -83,6 +85,68 @@ bool verify_cert_chain_platform_specific(boost::asio::ssl::verify_context &verif
 #endif
     return verify_result;
 }
+
+std::string get_public_key_from_cert(X509* cert)
+{
+    std::string result;
+
+    EVP_PKEY *pKey =  X509_get_pubkey(cert);
+    
+    std::size_t keyLen = i2d_PublicKey(pKey, NULL);
+
+    if(keyLen > 0)
+    {
+        std::vector<unsigned char> buf(keyLen, 0x00);
+
+        unsigned char *buffer = &buf[0];
+
+        i2d_PublicKey(pKey, &buffer);
+
+        std::stringstream ssResult;
+
+        ssResult << std::hex;
+
+        for(auto value: buf)
+        {
+            ssResult << std::setw(2) << std::setfill('0') << (int) (value);
+        }
+
+        result = ssResult.str();
+    }
+
+    return result; 
+}
+    
+std::vector<std::string> get_cert_chain_public_keys(boost::asio::ssl::verify_context &verifyCtx)
+{
+    std::vector<std::string> certChain;
+ 
+    X509_STORE_CTX *storeContext = verifyCtx.native_handle();
+    int currentDepth = X509_STORE_CTX_get_error_depth(storeContext);
+    if (currentDepth != 0)
+    {
+        return certChain;
+    }
+    
+    STACK_OF(X509) *certStack = X509_STORE_CTX_get_chain(storeContext);
+    const int numCerts = sk_X509_num(certStack);
+    if (numCerts < 0)
+    {
+        return certChain;
+    }
+    
+    certChain.reserve(numCerts);
+
+    for (int i = 0; i < numCerts; ++i)
+    {
+        X509 *cert = sk_X509_value(certStack, i);
+        
+        certChain.push_back(get_public_key_from_cert(cert));
+    }
+    
+    return certChain;
+}
+
 #endif
 
 }}}}
