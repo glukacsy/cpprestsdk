@@ -398,6 +398,11 @@ std::string get_public_key_from_cert(X509* cert)
 
     EVP_PKEY *pKey =  X509_get_pubkey(cert);
     
+    if(!pKey)
+    {
+        return result;
+    }
+
     std::size_t keyLen = i2d_PublicKey(pKey, NULL);
 
     if(keyLen > 0)
@@ -419,6 +424,8 @@ std::string get_public_key_from_cert(X509* cert)
 
         result = ssResult.str();
     }
+
+    EVP_PKEY_free(pKey);
 
     return result; 
 }
