@@ -946,25 +946,17 @@ private:
 
         const auto &host = utility::conversions::to_utf8string(m_http_client->base_uri().host());
         
-        auto cert_chain_public_keys = web::http::client::details::get_cert_chain_public_keys(verifyCtx);
+        using namespace web::http::client::details;
 
-        if(!cert_chain_public_keys.empty())
+        auto pinningCallback = [this, host](const std::string& host, const std::string& key) {
+            return m_http_client->client_config().invoke_pinning_callback(host, key);
+        };
+
+        auto pinningResult = is_certificate_pinned(host, verifyCtx, pinningCallback);
+
+        if (pinningResult == PinningResult::NotPinned)
         {
-            auto pinned = false;
-            
-            for(const auto& key: cert_chain_public_keys)
-            {
-                if(m_http_client->client_config().invoke_pinning_callback(host, key))
-                {
-                    pinned = true;
-                    break;
-                }
-            }
-            
-            if(!pinned)
-            {
-                return false;
-            }
+            return false;
         }
         
 #if defined(__APPLE__) || (defined(ANDROID) || defined(__ANDROID__))
