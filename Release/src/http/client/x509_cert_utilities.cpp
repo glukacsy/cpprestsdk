@@ -154,6 +154,30 @@ std::vector<std::string> get_cert_chain_public_keys(boost::asio::ssl::verify_con
     return certChain;
 }
 
+PinningResult is_certificate_pinned(const std::string& host, boost::asio::ssl::verify_context &verifyCtx, PinningCallBackFunction pinningCallback)
+{
+    PinningResult result = PinningResult::NoKeys;
+
+    auto cert_chain_public_keys = web::http::client::details::get_cert_chain_public_keys(verifyCtx);
+
+    if (!cert_chain_public_keys.empty())
+    {
+        result = PinningResult::NotPinned;
+
+        for (const auto& key : cert_chain_public_keys)
+        {
+            if (pinningCallback(host, key))
+            {
+                result = PinningResult::Pinned;
+
+                break;
+            }
+        }
+    }
+
+    return result;
+}
+
 #endif
 
 }}}}

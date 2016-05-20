@@ -73,6 +73,8 @@ enum class websocket_close_status
     server_terminate = 1011,
 };
 
+using PinningCallBackFunction = std::function<bool(const utf8string& url, const utf8string& publicKey)>;
+
 /// <summary>
 /// Websocket client configuration class, used to set the possible configuration options
 /// used to create an websocket_client instance.
@@ -84,7 +86,9 @@ public:
     /// <summary>
     /// Creates a websocket client configuration with default settings.
     /// </summary>
-    websocket_client_config() : m_sni_enabled(true) {}
+    websocket_client_config() : 
+        m_certificate_pinning_callback([](const utf8string&, const utf8string&)->bool { return true; }) // by default certificate pinning returns success
+        , m_sni_enabled(true) {}
 
     /// <summary>
     /// Get the web proxy object
@@ -188,12 +192,32 @@ public:
     /// they can be directly looked up in the headers using 'Sec-WebSocket-Protocol'.</remarks>
     _ASYNCRTIMP std::vector<::utility::string_t> subprotocols() const;
 
+    /// <summary>
+    /// Set the certificate pinning callback. If set, HTTP client will call this callback in a blocking manner during HTTP connection.
+    /// </summary>
+    void set_user_certificate_pinning_callback(const PinningCallBackFunction& callback)
+    {
+        m_certificate_pinning_callback = callback;
+    }
+
+    /// <summary>
+    /// Invokes the certificate pinning callback.
+    /// </summary>
+    /// <param name="url">The URL in the actual TLS session which might be different than the original URL due to redirection.</param>
+    /// <param name="certificate">The public key of one of the certificate in the chain presented to the consumer for validation purposes.</param>
+    /// <returns>True if the consumer code validated the certificate, false otherwise. False will terminate the HTTP connection.</returns>
+    bool invoke_pinning_callback(const utf8string& url, const utf8string& public_key) const
+    {
+        return m_certificate_pinning_callback(url, public_key);
+    }
+
 private:
     web::web_proxy m_proxy;
     web::credentials m_credentials;
     web::http::http_headers m_headers;
     bool m_sni_enabled;
     utf8string m_sni_hostname;
+    PinningCallBackFunction m_certificate_pinning_callback;
 };
 
 /// <summary>

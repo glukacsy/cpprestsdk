@@ -59,7 +59,16 @@ bool verify_cert_chain_platform_specific(boost::asio::ssl::verify_context &verif
 
 bool verify_X509_cert_chain(const std::vector<std::string> &certChain, const std::string &hostName);
 
-std::vector<std::string> get_cert_chain_public_keys(boost::asio::ssl::verify_context &verifyCtx);
+enum class PinningResult
+{
+    NoKeys,
+    Pinned,
+    NotPinned
+};
+
+using PinningCallBackFunction = std::function<bool(const std::string&, const std::string&)>;
+
+PinningResult is_certificate_pinned(const std::string& host, boost::asio::ssl::verify_context &verifyCtx, PinningCallBackFunction pinningCallback);
 
 }}}}
 

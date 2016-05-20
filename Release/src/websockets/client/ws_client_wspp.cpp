@@ -171,6 +171,19 @@ public:
 #endif
                 sslContext->set_verify_callback([this](bool preverified, boost::asio::ssl::verify_context &verifyCtx)
                 {
+                    using namespace web::http::client::details;
+
+                    auto pinningCallback = [this](const std::string& host, const std::string& key) {
+                        return m_config.invoke_pinning_callback(host, key);
+                    };
+
+                    auto pinningResult = is_certificate_pinned(m_config.server_name(), verifyCtx, pinningCallback);
+
+                    if (pinningResult == PinningResult::NotPinned)
+                    {
+                        return false;
+                    }
+
 #if defined(__APPLE__) || (defined(ANDROID) || defined(__ANDROID__)) || defined(_WIN32)
                     // On OS X, iOS, and Android, OpenSSL doesn't have access to where the OS
                     // stores keychains. If OpenSSL fails we will doing verification at the
