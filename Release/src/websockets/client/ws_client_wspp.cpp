@@ -177,7 +177,7 @@ public:
                         return m_config.invoke_pinning_callback(host, key);
                     };
                     
-                    auto host = m_uri.host();
+                    auto host = utility::conversions::to_utf8string(m_uri.host());
 
                     auto certPinned = is_certificate_pinned(host, verifyCtx, pinningCallback);
 
