@@ -176,10 +176,12 @@ public:
                     auto pinningCallback = [this](const std::string& host, const std::string& key) {
                         return m_config.invoke_pinning_callback(host, key);
                     };
+                    
+                    auto host = m_uri.host();
 
-                    auto pinningResult = is_certificate_pinned(m_config.server_name(), verifyCtx, pinningCallback);
+                    auto certPinned = is_certificate_pinned(host, verifyCtx, pinningCallback);
 
-                    if (pinningResult == PinningResult::NotPinned)
+                    if (!certPinned)
                     {
                         return false;
                     }

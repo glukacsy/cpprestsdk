@@ -887,9 +887,9 @@ private:
             return m_http_client->client_config().invoke_pinning_callback(host, key);
         };
 
-        auto pinningResult = is_certificate_pinned(host, verifyCtx, pinningCallback);
+        auto certPinned = is_certificate_pinned(host, verifyCtx, pinningCallback);
 
-        if (pinningResult == PinningResult::NotPinned)
+        if (!certPinned)
         {
             return false;
         }
