@@ -129,11 +129,6 @@ std::vector<std::string> get_cert_chain_public_keys(boost::asio::ssl::verify_con
     std::vector<std::string> certChain;
  
     X509_STORE_CTX *storeContext = verifyCtx.native_handle();
-    int currentDepth = X509_STORE_CTX_get_error_depth(storeContext);
-    if (currentDepth != 0)
-    {
-        return certChain;
-    }
     
     STACK_OF(X509) *certStack = X509_STORE_CTX_get_chain(storeContext);
     const int numCerts = sk_X509_num(certStack);
