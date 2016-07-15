@@ -35,6 +35,7 @@
 #include <websocketpp/uri.hpp>
 #include <websocketpp/logger/levels.hpp>
 
+#include <websocketpp/common/asio.hpp>
 #include <websocketpp/common/functional.hpp>
 
 #include <sstream>
@@ -91,7 +92,7 @@ public:
     explicit endpoint()
       : m_io_service(NULL)
       , m_external_io_service(false)
-      , m_listen_backlog(0)
+      , m_listen_backlog(lib::asio::socket_base::max_connections)
       , m_reuse_addr(false)
       , m_state(UNINITIALIZED)
     {
@@ -314,8 +315,10 @@ public:
      *
      * New values affect future calls to listen only.
      *
-     * A value of zero will use the operating system default. This is the
-     * default value.
+     * The default value is specified as *::asio::socket_base::max_connections
+     * which uses the operating system defined maximum queue length. Your OS
+     * may restrict or silently lower this value. A value of zero may cause
+     * all connections to be rejected.
      *
      * @since 0.3.0
      *
@@ -328,10 +331,13 @@ public:
     /// Sets whether to use the SO_REUSEADDR flag when opening listening sockets
     /**
      * Specifies whether or not to use the SO_REUSEADDR TCP socket option. What
-     * this flag does depends on your operating system. Please consult operating
-     * system documentation for more details.
+     * this flag does depends on your operating system.
      *
-     * New values affect future calls to listen only.
+     * Please consult operating system documentation for more details. There
+     * may be security consequences to enabling this option.
+     *
+     * New values affect future calls to listen only so set this value prior to
+     * calling listen.
      *
      * The default is false.
      *
