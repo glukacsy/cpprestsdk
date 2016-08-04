@@ -26,6 +26,7 @@
 #include "cpprest/uri.h"
 #include "cpprest/details/web_utilities.h"
 #include "cpprest/http_headers.h"
+#include "cpprest/json.h"
 #include "cpprest/asyncrt_utils.h"
 #include "cpprest/ws_msg.h"
 
@@ -62,6 +63,7 @@ enum class websocket_close_status
 };
 
 using PinningCallBackFunction = std::function<bool(const utf8string& url, const utf8string& publicKey)>;
+using rejected_certificate_callback_function = std::function<void(const json::value)>;
 
 /// <summary>
 /// Websocket client configuration class, used to set the possible configuration options
@@ -219,6 +221,25 @@ public:
         return m_certificate_pinning_callback(url, public_key);
     }
 
+    /// <summary>
+    /// Sets a callback that will callback with the rejected certificate chain when cert pinning fails.
+    /// </summary>
+    void set_rejected_callback_with_failed_cert_chain(const rejected_certificate_callback_function& callback)
+    {
+        m_rejected_certificates_callback = callback;
+    }
+
+    /// <summary>
+    /// Invokes the rejected certificate chain callback.
+    /// </summary>
+    void invoke_rejected_certs_chain_callback(const json::value& certInfo) const
+    {
+        if (m_rejected_certificates_callback)
+        {
+            m_rejected_certificates_callback(certInfo);
+        }
+    }
+
 private:
     web::web_proxy m_proxy;
     web::credentials m_credentials;
@@ -227,6 +248,8 @@ private:
     utf8string m_sni_hostname;
     bool m_validate_certificates;
     PinningCallBackFunction m_certificate_pinning_callback;
+
+    rejected_certificate_callback_function m_rejected_certificates_callback;
 };
 
 /// <summary>

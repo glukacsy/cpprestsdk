@@ -38,6 +38,9 @@ namespace http
 using web::uri;
 using web::uri_builder;
 
+using cert_chain_info = std::vector<std::tuple<utility::string_t, utility::string_t, utility::string_t>>;
+using rejected_certificate_callback_function = std::function<void(const cert_chain_info)>;
+
 namespace client
 {
     class http_client;
@@ -1297,6 +1300,19 @@ public:
         _m_impl->_set_base_uri(base_uri);
     }
 
+    void invoke_rejected_certificate_chain_callback(const cert_chain_info& certificatesInfo)
+    {
+        if (m_rejected_certificate_chain_callback)
+        {
+            m_rejected_certificate_chain_callback(certificatesInfo);
+        }
+    }
+
+    void set_user_rejected_certificate_chain_callback(const rejected_certificate_callback_function& callback)
+    {
+        m_rejected_certificate_chain_callback = callback;
+    }
+
 private:
     friend class http::details::_http_request;
     friend class http::client::http_client;
@@ -1304,6 +1320,8 @@ private:
     http_request(std::unique_ptr<http::details::_http_server_context> server_context) : _m_impl(std::make_shared<details::_http_request>(std::move(server_context))) {}
 
     std::shared_ptr<http::details::_http_request> _m_impl;
+
+    rejected_certificate_callback_function m_rejected_certificate_chain_callback;
 };
 
 namespace client {

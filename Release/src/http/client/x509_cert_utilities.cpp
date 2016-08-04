@@ -42,6 +42,9 @@ namespace web { namespace http { namespace client { namespace details {
 
 static bool verify_X509_cert_chain(const std::vector<std::string> &certChain, const std::string &hostName);
 
+class web::json::value;
+
+#if defined(__APPLE__) || (defined(ANDROID) || defined(__ANDROID__)) || (defined(_WIN32)  && !defined(__cplusplus_winrt) && !defined(_M_ARM) && !defined(CPPREST_EXCLUDE_WEBSOCKETS))
 bool verify_cert_chain_platform_specific(boost::asio::ssl::verify_context &verifyCtx, const std::string &hostName)
 {
     X509_STORE_CTX *storeContext = verifyCtx.native_handle();
@@ -429,7 +432,7 @@ std::string get_public_key_from_cert(X509* cert)
 
     return result; 
 }
-    
+
 std::vector<std::string> get_cert_chain_public_keys(boost::asio::ssl::verify_context &verifyCtx)
 {
     std::vector<std::string> certChain;
@@ -455,11 +458,41 @@ std::vector<std::string> get_cert_chain_public_keys(boost::asio::ssl::verify_con
     return certChain;
 }
 
-bool is_certificate_pinned(const std::string& host, boost::asio::ssl::verify_context &verifyCtx, PinningCallBackFunction pinningCallback)
+json::value get_cert_chain_information(boost::asio::ssl::verify_context &verifyCtx)
+{
+    X509_STORE_CTX *storeContext = verifyCtx.native_handle();
+
+    STACK_OF(X509) *certStack = X509_STORE_CTX_get_chain(storeContext);
+
+    const int numCerts = sk_X509_num(certStack);
+    if (numCerts < 0)
+    {
+        return {};
+    }
+ 
+    json::value certChainInformation;
+
+    for (int index = 0; index < numCerts; ++index)
+    {
+        X509 *cert = sk_X509_value(certStack, index);
+
+        json::value certInformation;
+        certInformation[U("Issuer")] = json::value::string(get_issuer_from_cert(cert));
+        certInformation[U("Subject")] = json::value::string(get_subject_from_cert(cert));
+        certInformation[U("FingerPrint")] = json::value::string(get_fingerprint_from_cert(cert));
+
+        utility::stringstream_t countInfo;
+        countInfo << "Certificate: " << index;
+        certChainInformation[countInfo.str()] = certInformation;
+    }
+    return certChainInformation;
+}
+
+bool is_certificate_pinned(const std::string& host, boost::asio::ssl::verify_context &verifyCtx, PinningCallBackFunction pinningCallback, RejectedCertsCallback certInfoCallback)
 {
     bool result = false;
 
-    auto cert_chain_public_keys = web::http::client::details::get_cert_chain_public_keys(verifyCtx);
+    auto cert_chain_public_keys = http::client::details::get_cert_chain_public_keys(verifyCtx);
 
     if (cert_chain_public_keys.empty())
     {
@@ -476,7 +509,73 @@ bool is_certificate_pinned(const std::string& host, boost::asio::ssl::verify_con
         }
     }
 
+    if (!result && certInfoCallback)
+    {
+        certInfoCallback(get_cert_chain_information(verifyCtx));
+    }
+
     return result;
+}
+
+utility::string_t get_fingerprint_from_cert(const X509* cert)
+{
+    unsigned int size;
+    unsigned char buffer[EVP_MAX_MD_SIZE];
+
+    if (!X509_digest(cert, EVP_sha1(), buffer, &size))
+    {
+        return U("");
+    }
+
+    std::stringstream sah1Result;
+
+    sah1Result << std::hex;
+
+    for (unsigned int index = 0; index < size; ++index)
+    {
+        sah1Result << std::setw(2) << std::setfill('0') << (int)(buffer[index]);
+    }
+
+    auto fPrint = sah1Result.str();
+    return utility::string_t(fPrint.begin(), fPrint.end());
+}
+
+utility::string_t get_subject_from_cert(X509* cert)
+{
+    X509_NAME* sub = X509_get_subject_name(cert);
+
+    if (!sub)
+    {
+        return U("");
+    }
+
+    const char* buffer = X509_NAME_oneline(sub, 0, 0);
+
+    if (!buffer)
+    {
+        return U("");
+    }
+
+    return utility::conversions::to_string_t(buffer);
+}
+
+utility::string_t get_issuer_from_cert(X509* cert)
+{
+    X509_NAME* issuer = X509_get_issuer_name(cert);
+
+    if (!issuer)
+    {
+        return U("");
+    }
+
+    const char* buffer = X509_NAME_oneline(issuer, 0, 0);
+
+    if (!buffer)
+    {
+        return U("");
+    }
+
+    return utility::conversions::to_string_t(buffer);
 }
 
 #endif
