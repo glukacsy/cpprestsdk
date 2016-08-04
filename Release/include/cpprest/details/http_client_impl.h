@@ -197,6 +197,8 @@ public:
     // Registration for cancellation notification if enabled.
     pplx::cancellation_token_registration m_cancellationRegistration;
 
+    bool m_certificate_pinning_failed{ false };
+
 protected:
 
     request_context(const std::shared_ptr<_http_client_communicator> &client, const http_request &request)

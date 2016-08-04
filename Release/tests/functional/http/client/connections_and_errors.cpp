@@ -107,6 +107,56 @@ TEST_FIXTURE(uri_address, open_failure)
     VERIFY_THROWS(t.wait(), web::http::http_exception);
 }
 
+TEST_FIXTURE(uri_address, cert_pinning_succeed)
+{
+    test_http_server::scoped_server scoped(m_uri);
+
+    http_client_config client_config;
+    web::credentials cred(U("some_user"), U("some_password"));
+    client_config.set_credentials(cred);
+    pplx::cancellation_token_source source;
+
+    client_config.set_user_certificate_pinning_callback([](const utility::string_t&, const utility::string_t&)->bool
+    {
+        // accept any certificate.
+        return true;
+    });
+
+    http_client client(m_uri, client_config);
+
+    scoped.server()->next_request().then([&](test_request *p_request)
+    {
+        http_asserts::assert_test_request_equals(p_request, methods::GET, U("/"));
+        p_request->reply(200);
+    });
+
+    auto response = client.request(methods::GET, source.get_token()).get();
+
+    VERIFY_ARE_EQUAL(status_codes::OK, response.status_code());
+}
+
+TEST_FIXTURE(uri_address, cert_pinning_failed)
+{
+    test_http_server::scoped_server scoped(m_uri);
+
+    http_client_config client_config;
+    web::credentials cred(U("some_user"), U("some_password"));
+    client_config.set_credentials(cred);
+    pplx::cancellation_token_source source;
+
+    client_config.set_user_certificate_pinning_callback([](const utility::string_t&, const utility::string_t&)->bool
+    {
+        // don't accept any certificate.
+        return false;
+    });
+
+    http_client client(m_uri, client_config);
+
+    auto request = client.request(methods::GET, source.get_token());
+
+    VERIFY_THROWS_HTTP_ERROR_CODE(request.wait(), std::errc::operation_not_permitted);
+}
+
 TEST_FIXTURE(uri_address, server_close_without_responding)
 {
     test_http_server server(m_uri);

@@ -879,7 +879,7 @@ private:
 		{
 			stream << std::setw(2) << std::setfill('0') << (int)((unsigned char*)publicKey)[i];
 		}
-		
+
 		return utility::conversions::to_string_t(stream.str());
 	}
 
@@ -1034,7 +1034,12 @@ private:
                             return;
                         }
                     }
-
+                    // If cert pinning error was recored, report the correct error.
+                    if (p_request_context->m_certificate_pinning_failed)
+                    {
+                        p_request_context->report_error(make_error_code(std::errc::operation_not_permitted).value(), "WinHttpCertPinningFailed");
+                        break;
+                    }
                     p_request_context->report_error(errorCode, build_error_msg(error_result));
                     break;
                 }
@@ -1046,7 +1051,7 @@ private:
 					auto urlwchar = new WCHAR[urlSize/sizeof(WCHAR)];
 
 					WinHttpQueryOption(hRequestHandle, WINHTTP_OPTION_URL, (void*)urlwchar, &urlSize);
-					utility::string_t url(urlwchar); 
+					utility::string_t url(urlwchar);
 
 					delete[] urlwchar;
 
@@ -1075,7 +1080,7 @@ private:
 						PCCERT_CHAIN_CONTEXT pChainContext = {};
 
 						// build the certificate chain relying on the actual intermediate certs returned as part of the TLS session
-						// disable any network operations to fetch certificates 
+						// disable any network operations to fetch certificates
 						auto validChain = CertGetCertificateChain(NULL, pCert, NULL, pCert->hCertStore, &chainPara,
 							CERT_CHAIN_CACHE_ONLY_URL_RETRIEVAL |
 							CERT_CHAIN_REVOCATION_CHECK_CACHE_ONLY |
@@ -1127,7 +1132,8 @@ private:
 
 						if (!pinned)
 						{
-							// client refused all the certificates, we need to cancel the current HTTP request
+							// client refused all the certificates, track the failure and cancel the request.
+							p_request_context->m_certificate_pinning_failed = true;
 							p_request_context->cleanup();
 							return;
 						}
@@ -1137,6 +1143,8 @@ private:
 						// not able to extract the leaf certificate, ask the pinning callback what to do in this case by passing in null values
 						if (!p_request_context->m_http_client->client_config().invoke_pinning_callback(url, U("")))
 						{
+							// connection not allowed to continue with no certificates available, track the failure and cancel the request.
+							p_request_context->m_certificate_pinning_failed = true;
 							p_request_context->cleanup();
 							return;
 						}
