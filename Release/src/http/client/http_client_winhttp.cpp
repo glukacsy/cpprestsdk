@@ -1005,6 +1005,65 @@ private:
         return true;
     }
 
+    static utility::string_t get_string_from_certificate(PCCERT_CONTEXT pCertContext, DWORD dwType, DWORD dwFlags)
+    {
+        utility::string_t propertieString;
+
+        DWORD cbSize = CertGetNameStringW(
+            pCertContext,
+            dwType,
+            dwFlags,
+            NULL,
+            NULL,
+            0);
+
+        if (cbSize)
+        {
+            std::vector<wchar_t> buffer;
+            buffer.resize(cbSize);
+            if (CertGetNameStringW(
+                pCertContext,
+                dwType,
+                dwFlags,
+                NULL,
+                &buffer[0],
+                cbSize))
+            {
+                propertieString = utility::string_t(&buffer[0]);
+            }
+        }
+        return propertieString;
+    }
+
+    static utility::string_t get_fingerprint_from_certificate(PCCERT_CONTEXT pCertContext)
+    {
+        DWORD size = 0;
+        utility::string_t fingerPrintString;
+
+        HRESULT result = CertGetCertificateContextProperty(pCertContext, CERT_HASH_PROP_ID, NULL, &size);
+        if (!FAILED(result))
+        {
+            std::vector<BYTE> buffer;
+            buffer.resize(size);
+
+            result = CertGetCertificateContextProperty(pCertContext, CERT_HASH_PROP_ID, &buffer[0], &size);
+            if (!FAILED(result))
+            {
+                std::stringstream ss;
+                ss << std::hex << std::setw(2) << std::setfill('0');
+                for (const auto& i : buffer)
+                {
+                    char str[3];
+                    _snprintf_s(str, sizeof(str) - 1, "%02x", static_cast<int>(i));
+                    ss << str;
+                }
+                auto fPrint = ss.str(); 
+                fingerPrintString = utility::string_t(fPrint.begin(), fPrint.end());
+            }
+        }
+        return fingerPrintString;
+    }
+
     // Callback used with WinHTTP to listen for async completions.
     static void CALLBACK completion_callback(
         HINTERNET hRequestHandle,
@@ -1071,6 +1130,7 @@ private:
 					if (pCert)
 					{
 						std::vector<utility::string_t> certificates;
+                        cert_chain_info certificatesInfo;
 
 						CERT_ENHKEY_USAGE keyUsage = {};
 						keyUsage.cUsageIdentifier = 0;
@@ -1110,8 +1170,16 @@ private:
 
 									// remember public key
 									certificates.push_back(getCertificateString(publicKey.pbData, publicKey.cbData));
+
+                                    auto certFingerPrint = get_fingerprint_from_certificate(cert);
+                                    if (!certFingerPrint.empty())
+                                    {
+                                        auto issuer = get_string_from_certificate(cert, CERT_NAME_SIMPLE_DISPLAY_TYPE, CERT_NAME_ISSUER_FLAG);
+                                        auto subject = get_string_from_certificate(cert, CERT_NAME_SIMPLE_DISPLAY_TYPE, 0);
+                                        certificatesInfo.emplace_back(issuer, subject, certFingerPrint);
 								}
 							}
+						}
 						}
 						else
 						{
@@ -1139,6 +1207,8 @@ private:
 
 						if (!pinned)
 						{
+                            // Report back to the client with the failed certs when cert-pinning has failed.
+                            p_request_context->m_request.invoke_rejected_certificate_chain_callback(certificatesInfo);
 							// client refused all the certificates, track the failure and cancel the request.
 							p_request_context->m_certificate_pinning_failed = true;
 							p_request_context->cleanup();
@@ -1150,7 +1220,8 @@ private:
 						// not able to extract the leaf certificate, ask the pinning callback what to do in this case by passing in null values
 						if (!p_request_context->m_http_client->client_config().invoke_pinning_callback(url, U("")))
 						{
-							// connection not allowed to continue with no certificates available, track the failure and cancel the request.
+							// connection not allowed to continue with no certificates available, callback with the failure and cancel the request.
+                            p_request_context->m_request.invoke_rejected_certificate_chain_callback( {} );
 							p_request_context->m_certificate_pinning_failed = true;
 							p_request_context->cleanup();
 							return;
