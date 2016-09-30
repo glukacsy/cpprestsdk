@@ -7,6 +7,8 @@ enable_testing()
 set(WARNINGS)
 set(ANDROID_STL_FLAGS)
 
+option(LIB_TYPE "Library type - STATIC/SHARED" SHARED)
+
 # Platform (not compiler) specific settings
 if(IOS)
   set(IOS_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../Build_iOS")
@@ -89,9 +91,14 @@ elseif(UNIX) # This includes OSX
   
   option(BUILD_SHARED_LIBS "Build shared Libraries." ON)
   
-  # Prefer the homebrew version of zlib
-  find_library(ZLIB_LIBRARIES NAMES libz.a PATHS /usr/local/Cellar/zlib/1.2.8/lib NO_DEFAULT_PATH)
-  find_path(ZLIB_INCLUDE_DIRS NAMES zlib.h PATHS /usr/local/Cellar/zlib/1.2.8/include NO_DEFAULT_PATH)
+  if(NOT APPLE)
+    find_library(ZLIB_LIBRARIES NAMES libz.a)
+    find_path(ZLIB_INCLUDE_DIRS NAMES zlib.h)
+  else()
+    # Prefer the homebrew version of zlib
+    find_library(ZLIB_LIBRARIES NAMES libz.a PATHS /usr/local/Cellar/zlib/1.2.8/lib NO_DEFAULT_PATH)
+    find_path(ZLIB_INCLUDE_DIRS NAMES zlib.h PATHS /usr/local/Cellar/zlib/1.2.8/include NO_DEFAULT_PATH)
+  endif()
   
   if(NOT ZLIB_LIBRARIES OR NOT ZLIB_INCLUDE_DIRS)
     find_package(ZLib)
@@ -152,11 +159,11 @@ if(ANDROID)
 elseif((CMAKE_CXX_COMPILER_ID MATCHES "Clang") OR IOS)
   message("-- Setting clang options")
 
-  set(WARNINGS "-Wall -Wextra -Wcast-qual -Wconversion -Wformat=2 -Winit-self -Winvalid-pch -Wmissing-format-attribute -Wmissing-include-dirs -Wpacked -Wredundant-decls")
+  #set(WARNINGS "-Wall -Wextra -Wcast-qual -Wconversion -Wformat=2 -Winit-self -Winvalid-pch -Wmissing-format-attribute -Wmissing-include-dirs -Wpacked -Wredundant-decls")
   set(OSX_SUPPRESSIONS "-Wno-overloaded-virtual -Wno-sign-conversion -Wno-deprecated -Wno-unknown-pragmas -Wno-reorder -Wno-char-subscripts -Wno-switch -Wno-unused-parameter -Wno-unused-variable -Wno-deprecated -Wno-unused-value -Wno-unknown-warning-option -Wno-return-type-c-linkage -Wno-unused-function -Wno-sign-compare -Wno-shorten-64-to-32 -Wno-reorder -Wno-unused-local-typedefs")
   set(WARNINGS "${WARNINGS} ${OSX_SUPPRESSIONS}")
 
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -stdlib=libc++ -Wno-return-type-c-linkage -Wno-unneeded-internal-declaration")
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-return-type-c-linkage -Wno-unneeded-internal-declaration")
   set(CMAKE_XCODE_ATTRIBUTE_CLANG_CXX_LIBRARY "libc++")
   set(CMAKE_XCODE_ATTRIBUTE_CLANG_CXX_LANGUAGE_STANDARD "c++11")
 
@@ -164,7 +171,7 @@ elseif((CMAKE_CXX_COMPILER_ID MATCHES "Clang") OR IOS)
 elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
   message("-- Setting gcc options")
 
-  set(WARNINGS "-Wall -Wextra -Wunused-parameter -Wcast-align -Wcast-qual -Wconversion -Wformat=2 -Winit-self -Winvalid-pch -Wmissing-format-attribute -Wmissing-include-dirs -Wpacked -Wredundant-decls -Wunreachable-code")
+  set(WARNINGS "-Wall -Wextra -Wunused-parameter -Wcast-align -Wcast-qual -Wconversion -Wformat=2 -Winit-self -Winvalid-pch -Wmissing-format-attribute -Wmissing-include-dirs -Wpacked -Wredundant-decls -Wunreachable-code -Wno-reorder -Wno-overloaded-virtual -Wno-sign-conversion -Wno-deprecated -Wno-unknown-pragmas -Wno-reorder -Wno-char-subscripts -Wno-switch -Wno-unused-parameter -Wno-unused-variable -Wno-deprecated -Wno-unused-value -Wno-unknown-warning-option -Wno-return-type-c-linkage -Wno-unused-function -Wno-sign-compare -Wdeprecated-declarations -Wno-shorten-64-to-32 -Wno-reorder -Wno-unused-local-typedefs")
 
   set(LD_FLAGS "${LD_FLAGS} -Wl,-z,defs")
 
