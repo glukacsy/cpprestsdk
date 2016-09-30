@@ -44,7 +44,10 @@ static bool verify_X509_cert_chain(const std::vector<std::string> &certChain, co
 
 class web::json::value;
 
-#if defined(__APPLE__) || (defined(ANDROID) || defined(__ANDROID__)) || (defined(_WIN32)  && !defined(__cplusplus_winrt) && !defined(_M_ARM) && !defined(CPPREST_EXCLUDE_WEBSOCKETS))
+#if defined(__APPLE__) || (defined(ANDROID) || defined(__ANDROID__)) || (defined(_WIN32)  && !defined(__cplusplus_winrt) && !defined(_M_ARM) && !defined(CPPREST_EXCLUDE_WEBSOCKETS)) || defined(__linux__)
+
+#ifndef __linux__
+
 bool verify_cert_chain_platform_specific(boost::asio::ssl::verify_context &verifyCtx, const std::string &hostName)
 {
     X509_STORE_CTX *storeContext = verifyCtx.native_handle();
@@ -395,6 +398,8 @@ bool verify_X509_cert_chain(const std::vector<std::string> &certChain, const std
     return false;
 }
 
+#endif
+
 std::string get_public_key_from_cert(X509* cert)
 {
     std::string result;
@@ -577,8 +582,6 @@ utility::string_t get_issuer_from_cert(X509* cert)
 
     return utility::conversions::to_string_t(buffer);
 }
-
-#endif
 
 #if defined(_WIN32)
 namespace {

@@ -15,7 +15,7 @@
 
 #include <string>
 
-#if defined(__APPLE__) || (defined(ANDROID) || defined(__ANDROID__)) || (defined(_WIN32)  && !defined(__cplusplus_winrt) && !defined(_M_ARM) && !defined(CPPREST_EXCLUDE_WEBSOCKETS))
+#if defined(__APPLE__) || (defined(ANDROID) || defined(__ANDROID__)) || (defined(_WIN32)  && !defined(__cplusplus_winrt) && !defined(_M_ARM) && !defined(CPPREST_EXCLUDE_WEBSOCKETS)) || (defined(__linux__))
 
 #if defined(_MSC_VER)
 #pragma warning(push)
@@ -37,6 +37,7 @@ namespace web { namespace http { namespace client { namespace details {
 
 using namespace utility;
 
+#ifndef __linux__
 
 /// <summary>
 /// Using platform specific APIs verifies server certificate.
@@ -48,6 +49,8 @@ using namespace utility;
 bool verify_cert_chain_platform_specific(boost::asio::ssl::verify_context &verifyCtx, const std::string &hostName);
 
 bool verify_X509_cert_chain(const std::vector<std::string> &certChain, const std::string &hostName);
+
+#endif
 
 using PinningCallBackFunction = std::function<bool(const std::string&, const std::string&)>;
 using RejectedCertsCallback = std::function<void(json::value)>;
@@ -64,4 +67,3 @@ utility::string_t get_issuer_from_cert(X509* cert);
 
 }}}}
 
-#endif

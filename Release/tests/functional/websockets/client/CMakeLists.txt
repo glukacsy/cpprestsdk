@@ -11,5 +11,5 @@ if (NOT CPPREST_EXCLUDE_WEBSOCKETS)
 
   # This works around "OBJECT" tests
   link_libraries(websockettest_utilities)
-  add_casablanca_test(websocketclient_test SOURCES)
+  add_casablanca_test(${LIB}websocketclient_test SOURCES)
 endif()

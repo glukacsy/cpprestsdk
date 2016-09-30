@@ -7,12 +7,17 @@ source_group("Header Files\\cpprest" FILES ${HEADERS_CPPREST})
 source_group("Header Files\\pplx" FILES ${HEADERS_PPLX})
 source_group("Header Files\\cpprest\\details" FILES ${HEADERS_DETAILS})
 
+<<<<<<< HEAD
 set(SOURCES
   ${HEADERS_CPPREST}
   ${HEADERS_PPLX}
   ${HEADERS_DETAILS}
   pch/stdafx.h
   http/client/http_client.cpp
+=======
+
+set(SOURCES_COMMON
+>>>>>>> improve cmake files for windows
   http/client/http_client_msg.cpp
   http/client/http_client_impl.h
   http/client/x509_cert_utilities.cpp
@@ -157,6 +162,44 @@ if (WIN32 AND NOT WINDOWS_STORE AND NOT WINDOWS_PHONE)
     bcrypt.lib
     crypt32.lib
   )
+elseif(APPLE)
+    list(APPEND SOURCES
+      pplx/pplxapple.cpp
+      http/client/x509_cert_utilities_apple.cpp
+    )
+    find_library(COREFOUNDATION CoreFoundation "/")
+    find_library(SECURITY Security "/")
+    set(EXTRALINKS ${COREFOUNDATION} ${SECURITY})
+  elseif(ANDROID)
+    list(APPEND SOURCES
+      http/client/x509_cert_utilities_android.cpp
+      pplx/pplxlinux.cpp
+    )
+  else()
+    list(APPEND SOURCES pplx/pplxlinux.cpp)
+  endif()
+  set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${WARNINGS} -Werror -pedantic")
+elseif(WIN32)
+  set(SOURCES_WIN
+    ${SOURCES_COMMON}
+    http/client/http_client_winhttp.cpp
+    http/client/x509_cert_utilities_win32.cpp
+    http/listener/http_server_httpsys.cpp
+    pplx/pplxwin.cpp
+    streams/fileio_win32.cpp
+  )
+  
+  set (PCH
+	pch/stdafx.cpp
+  )
+  
+  set(SOURCES 
+    ${SOURCES_WIN} ${PCH})
+  
+  set(EXTRALINKS
+    bcrypt.lib
+    crypt32.lib
+  )
 endif()
 
 # Websockets component
@@ -206,6 +249,12 @@ elseif(CPPREST_HTTP_CLIENT_IMPL STREQUAL "winrt")
 else()
   message(FATAL_ERROR "Invalid implementation")
 endif()
+  
+  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${WARNINGS}")
+  if (${CMAKE_GENERATOR} MATCHES "Visual Studio .*")
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /Yustdafx.h /Zm200")
+    set_source_files_properties(pch/stdafx.cpp PROPERTIES COMPILE_FLAGS "/Ycstdafx.h")
+  endif()
 
 # fileio streams component
 if(CPPREST_FILEIO_IMPL STREQUAL "win32")
