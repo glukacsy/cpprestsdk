@@ -176,10 +176,14 @@ public:
                     auto pinningCallback = [this](const std::string& host, const std::string& key) {
                         return m_config.invoke_pinning_callback(host, key);
                     };
+
+                    auto rejectedCertsCallback = [this](web::json::value certChainInfo) {
+                        m_config.invoke_rejected_certs_chain_callback(certChainInfo);
+                    };
                     
                     auto host = utility::conversions::to_utf8string(m_uri.host());
 
-                    auto certPinned = is_certificate_pinned(host, verifyCtx, pinningCallback);
+                    auto certPinned = is_certificate_pinned(host, verifyCtx, pinningCallback, rejectedCertsCallback);
 
                     if (!certPinned)
                     {
