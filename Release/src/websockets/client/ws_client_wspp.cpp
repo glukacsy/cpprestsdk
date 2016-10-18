@@ -177,7 +177,7 @@ public:
                         return m_config.invoke_pinning_callback(host, key);
                     };
 
-                    auto rejectedCertsCallback = [this](web::json::value certChainInfo) {
+                    auto rejectedCertsCallback = [this](json::value certChainInfo) {
                         m_config.invoke_rejected_certs_chain_callback(certChainInfo);
                     };
                     

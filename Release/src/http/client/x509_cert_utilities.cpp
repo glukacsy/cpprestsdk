@@ -31,8 +31,6 @@
 
 namespace web { namespace http { namespace client { namespace details {
 
-class web::json::value;
-
 #if defined(__APPLE__) || (defined(ANDROID) || defined(__ANDROID__)) || (defined(_WIN32)  && !defined(__cplusplus_winrt) && !defined(_M_ARM) && !defined(CPPREST_EXCLUDE_WEBSOCKETS))
 bool verify_cert_chain_platform_specific(boost::asio::ssl::verify_context &verifyCtx, const std::string &hostName)
 {
@@ -151,7 +149,7 @@ std::vector<std::string> get_cert_chain_public_keys(boost::asio::ssl::verify_con
     return certChain;
 }
 
-web::json::value get_cert_chain_information(boost::asio::ssl::verify_context &verifyCtx)
+json::value get_cert_chain_information(boost::asio::ssl::verify_context &verifyCtx)
 {
     X509_STORE_CTX *storeContext = verifyCtx.native_handle();
 
@@ -163,19 +161,16 @@ web::json::value get_cert_chain_information(boost::asio::ssl::verify_context &ve
         return {};
     }
  
-    web::json::value certChainInformation;
+    json::value certChainInformation;
 
     for (int index = 0; index < numCerts; ++index)
     {
         X509 *cert = sk_X509_value(certStack, index);
 
-        web::json::value certInformation;
-        certInformation[U("Issuer")] = web::json::value::string(get_issuer_from_cert(cert));
-        certInformation[U("Subject")] = web::json::value::string(get_subject_from_cert(cert));
-        certInformation[U("FingerPrint")] = web::json::value::string(get_fingerprint_from_cert(cert));
-
-        wchar_t certCount[256];
-        swprintf_s(certCount, L"%d", index);
+        json::value certInformation;
+        certInformation[U("Issuer")] = json::value::string(get_issuer_from_cert(cert));
+        certInformation[U("Subject")] = json::value::string(get_subject_from_cert(cert));
+        certInformation[U("FingerPrint")] = json::value::string(get_fingerprint_from_cert(cert));
 
         utility::stringstream_t countInfo;
         countInfo << "Certificate: " << index;
@@ -188,7 +183,7 @@ bool is_certificate_pinned(const std::string& host, boost::asio::ssl::verify_con
 {
     bool result = false;
 
-    auto cert_chain_public_keys = web::http::client::details::get_cert_chain_public_keys(verifyCtx);
+    auto cert_chain_public_keys = http::client::details::get_cert_chain_public_keys(verifyCtx);
 
     if (cert_chain_public_keys.empty())
     {
@@ -205,7 +200,7 @@ bool is_certificate_pinned(const std::string& host, boost::asio::ssl::verify_con
         }
     }
 
-    if (!result)
+    if (!result && certInfoCallback)
     {
         certInfoCallback(get_cert_chain_information(verifyCtx));
     }
@@ -223,16 +218,16 @@ utility::string_t get_fingerprint_from_cert(const X509* cert)
         return U("");
     }
 
-    std::stringstream ss;
-    ss << std::hex << std::setw(2) << std::setfill('0');
+    std::stringstream sah1Result;
+
+    sah1Result << std::hex;
+
     for (unsigned int index = 0; index < size; ++index)
     {
-        char str[3];
-        _snprintf_s(str, sizeof(str) - 1, "%02x", static_cast<int>(buffer[index]));
-        ss << str;
+        sah1Result << std::setw(2) << std::setfill('0') << (int)(buffer[index]);
     }
 
-    auto fPrint = ss.str();
+    auto fPrint = sah1Result.str();
     return utility::string_t(fPrint.begin(), fPrint.end());
 }
 

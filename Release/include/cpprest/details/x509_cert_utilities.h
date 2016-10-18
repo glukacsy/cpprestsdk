@@ -50,7 +50,6 @@ namespace web { namespace http { namespace client { namespace details {
 
 using namespace utility;
 
-class web::json::value;
 
 /// <summary>
 /// Using platform specific APIs verifies server certificate.
@@ -64,11 +63,11 @@ bool verify_cert_chain_platform_specific(boost::asio::ssl::verify_context &verif
 bool verify_X509_cert_chain(const std::vector<std::string> &certChain, const std::string &hostName);
 
 using PinningCallBackFunction = std::function<bool(const std::string&, const std::string&)>;
-using RejectedCertsCallback = std::function<void(web::json::value)>;
+using RejectedCertsCallback = std::function<void(json::value)>;
 
-bool is_certificate_pinned(const std::string& host, boost::asio::ssl::verify_context &verifyCtx, PinningCallBackFunction pinningCallback, RejectedCertsCallback rejectedCertsCallback);
+bool is_certificate_pinned(const std::string& host, boost::asio::ssl::verify_context &verifyCtx, PinningCallBackFunction pinningCallback, RejectedCertsCallback rejectedCertsCallback = nullptr);
 
-web::json::value get_cert_chain_information(boost::asio::ssl::verify_context &verifyCtx);
+json::value get_cert_chain_information(boost::asio::ssl::verify_context &verifyCtx);
 
 utility::string_t get_fingerprint_from_cert(const X509* cert);
 

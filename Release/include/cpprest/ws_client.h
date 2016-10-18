@@ -38,6 +38,7 @@
 #include "cpprest/uri.h"
 #include "cpprest/details/web_utilities.h"
 #include "cpprest/http_headers.h"
+#include "cpprest/json.h"
 #include "cpprest/asyncrt_utils.h"
 #include "cpprest/ws_msg.h"
 
@@ -74,7 +75,7 @@ enum class websocket_close_status
 };
 
 using PinningCallBackFunction = std::function<bool(const utf8string& url, const utf8string& publicKey)>;
-using rejected_certificate_callback_function = std::function<void(const web::json::value)>;
+using rejected_certificate_callback_function = std::function<void(const json::value)>;
 
 /// <summary>
 /// Websocket client configuration class, used to set the possible configuration options
@@ -223,7 +224,7 @@ public:
     /// <summary>
     /// Invokes the rejected certificate chain callback.
     /// </summary>
-    void invoke_rejected_certs_chain_callback(const web::json::value& certInfo) const
+    void invoke_rejected_certs_chain_callback(const json::value& certInfo) const
     {
         if (m_rejected_certificates_callback)
         {
