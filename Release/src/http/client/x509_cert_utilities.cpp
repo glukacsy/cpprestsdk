@@ -86,6 +86,8 @@ bool verify_cert_chain_platform_specific(boost::asio::ssl::verify_context &verif
     return verify_result;
 }
 
+#endif
+
 std::string get_public_key_from_cert(X509* cert)
 {
     std::string result;
@@ -268,7 +270,5 @@ utility::string_t get_issuer_from_cert(X509* cert)
 
     return utility::conversions::to_string_t(buffer);
 }
-
-#endif
 
 }}}}

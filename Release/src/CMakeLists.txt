@@ -81,7 +81,7 @@ elseif(WIN32)
   endif()
 endif()
 
-add_library(${Casablanca_LIBRARY} ${SOURCES})
+add_library(${Casablanca_LIBRARY} ${LIB_TYPE} ${SOURCES})
 
 target_link_libraries(${Casablanca_LIBRARY}
   ${CMAKE_THREAD_LIBS_INIT}

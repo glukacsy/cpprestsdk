@@ -1326,7 +1326,7 @@ private:
                     else
                     {
 
-                        writeBuffer.putn(&decompressed[0], decompressed.size())
+                        writeBuffer.putn_nocopy(&decompressed[0], decompressed.size())
                             .then([this_request, to_read](pplx::task<size_t> op)
                         {
                             try
@@ -1435,7 +1435,7 @@ private:
                 }
                 else
                 {
-                    writeBuffer.putn(&decompressed[0], decompressed.size())
+                    writeBuffer.putn_nocopy(&decompressed[0], decompressed.size())
                         .then([this_request, read_size](pplx::task<size_t> op)
                     {
                         size_t writtenSize = 0;
