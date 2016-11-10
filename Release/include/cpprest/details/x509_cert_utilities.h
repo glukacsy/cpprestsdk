@@ -28,6 +28,8 @@
 #include <vector>
 #include <string>
 
+#if defined(__APPLE__) || (defined(ANDROID) || defined(__ANDROID__)) || (defined(_WIN32)  && !defined(__cplusplus_winrt) && !defined(_M_ARM) && !defined(CPPREST_EXCLUDE_WEBSOCKETS)) || (defined(__linux__))
+
 #if defined(_MSC_VER)
 #pragma warning(push)
 #pragma warning(disable : 4005)
@@ -48,7 +50,7 @@ namespace web { namespace http { namespace client { namespace details {
 
 using namespace utility;
 
-#if defined(__APPLE__) || (defined(ANDROID) || defined(__ANDROID__)) || (defined(_WIN32)  && !defined(__cplusplus_winrt) && !defined(_M_ARM) && !defined(CPPREST_EXCLUDE_WEBSOCKETS))
+#ifndef __linux__
 
 /// <summary>
 /// Using platform specific APIs verifies server certificate.
@@ -78,4 +80,4 @@ utility::string_t get_issuer_from_cert(X509* cert);
 
 }}}}
 
-
+#endif
