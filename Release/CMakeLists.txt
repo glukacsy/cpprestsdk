@@ -7,8 +7,6 @@ enable_testing()
 set(WARNINGS)
 set(ANDROID_STL_FLAGS)
 
-option(LIB_TYPE "Library type - STATIC/SHARED" SHARED)
-
 # Platform (not compiler) specific settings
 if(IOS)
   set(IOS_SOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../Build_iOS")
@@ -90,22 +88,6 @@ elseif(UNIX) # This includes OSX
   find_package(OpenSSL 1.0.0 REQUIRED)
   
   option(BUILD_SHARED_LIBS "Build shared Libraries." ON)
-  
-  if(NOT APPLE)
-    find_library(ZLIB_LIBRARIES NAMES libz.a)
-    find_path(ZLIB_INCLUDE_DIRS NAMES zlib.h)
-  else()
-    # Prefer the homebrew version of zlib
-    find_library(ZLIB_LIBRARIES NAMES libz.a PATHS /usr/local/Cellar/zlib/1.2.8/lib NO_DEFAULT_PATH)
-    find_path(ZLIB_INCLUDE_DIRS NAMES zlib.h PATHS /usr/local/Cellar/zlib/1.2.8/include NO_DEFAULT_PATH)
-  endif()
-  
-  if(NOT ZLIB_LIBRARIES OR NOT ZLIB_INCLUDE_DIRS)
-    find_package(ZLib)
-	if(NOT ZLIB_FOUND)
-	  option(CPPREST_EXCLUDE_COMPRESSION "Exclude compression functionality." ON)
-	endif()
-  endif()
  
   option(BUILD_TESTS "Build tests." ON)
   option(BUILD_SAMPLES "Build samples." ON)
@@ -123,13 +105,17 @@ elseif(WIN32)
   option(BUILD_TESTS "Build tests." ON)
   option(BUILD_SAMPLES "Build samples." ON)
   option(CPPREST_EXCLUDE_WEBSOCKETS "Exclude websockets functionality." OFF)
-  option(Boost_USE_STATIC_LIBS ON)
-
-  add_definitions(-DUNICODE -D_UNICODE)
+  
+  option(RuntimeLib MD)
+  
+   add_definitions(-DUNICODE -D_UNICODE)
+   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /bigobj /Zi /DEBUG")
+   set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /${RuntimeLib} /O1 ")
+   set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /${RuntimeLib}d /Od" )
 
   if(NOT BUILD_SHARED_LIBS)
     # This causes cmake to not link the test libraries separately, but instead hold onto their object files.
-    set(TEST_LIBRARY_TARGET_TYPE OBJECT)
+	set(TEST_LIBRARY_TARGET_TYPE OBJECT)
     set(Casablanca_DEFINITIONS -D_NO_ASYNCRTIMP -D_NO_PPLXIMP CACHE INTERNAL "Definitions for consume casablanca library")
   else()
     set(Casablanca_DEFINITIONS "" CACHE INTERNAL "Definitions for consume casablanca library")
@@ -139,11 +125,37 @@ elseif(WIN32)
   if (CPPREST_EXCLUDE_WEBSOCKETS)
     add_definitions(-DCPPREST_EXCLUDE_WEBSOCKETS=1)
   else()
-    find_package(Boost 1.55 REQUIRED COMPONENTS random system thread filesystem chrono atomic)
+    find_package(Boost 1.55 REQUIRED COMPONENTS random system thread filesystem chrono atomic date_time regex)
     find_package(OpenSSL 1.0 REQUIRED)
   endif()
 else()
   message(FATAL_ERROR "-- Unsupported Build Platform.")
+endif()
+
+if(APPLE)
+  # Prefer the homebrew version of zlib
+  find_library(ZLIB_LIBRARIES NAMES libz.a PATHS /usr/local/Cellar/zlib/1.2.8/lib NO_DEFAULT_PATH)
+  find_path(ZLIB_INCLUDE_DIRS NAMES zlib.h PATHS /usr/local/Cellar/zlib/1.2.8/include NO_DEFAULT_PATH)
+elseif(WIN32)
+  find_library(ZLIB_LIBRARIES NAMES zlib.lib)
+  find_path(ZLIB_INCLUDE_DIRS NAMES zlib.h)
+else()
+  find_library(ZLIB_LIBRARIES NAMES libz.a)
+  find_path(ZLIB_INCLUDE_DIRS NAMES zlib.h)
+endif()
+  
+if(NOT ZLIB_LIBRARIES OR NOT ZLIB_INCLUDE_DIRS)
+  find_package(ZLib)
+else()
+   set(ZLIB_FOUND, True)
+endif()
+  
+if (NOT ZLIB_FOUND)
+  option(CPPREST_EXCLUDE_COMPRESSION "Exclude compression functionality." ON)
+endif()
+
+if (CPPREST_EXCLUDE_COMPRESSION)
+    add_definitions(-DCPPREST_EXCLUDE_COMPRESSION)
 endif()
 
 # Compiler (not platform) specific settings
@@ -218,6 +230,7 @@ set(Casablanca_LIBRARIES ${Casablanca_LIBRARY}
   ${Boost_CHRONO_LIBRARY}
   ${Boost_RANDOM_LIBRARY}
   ${Boost_REGEX_LIBRARY}
+  ${Boost_DATE_TIME_LIBRARY}
   ${Boost_FRAMEWORK}
   ${ZLIB_LIBRARIES}
   )

@@ -3,6 +3,7 @@ if (NOT CPPREST_EXCLUDE_WEBSOCKETS)
   include_directories(${Boost_INCLUDE_DIR} ${OPENSSL_INCLUDE_DIR})
 endif()
 
+
 set(SOURCES_COMMON
   http/client/http_client_msg.cpp
   http/client/x509_cert_utilities.cpp
@@ -55,21 +56,29 @@ if(UNIX)
   endif()
   set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${WARNINGS} -Werror -pedantic")
 elseif(WIN32)
-  set(SOURCES
+  set(SOURCES_WIN
     ${SOURCES_COMMON}
     http/client/http_client_winhttp.cpp
     http/client/x509_cert_utilities_win32.cpp
     http/listener/http_server_httpsys.cpp
     pplx/pplxwin.cpp
     streams/fileio_win32.cpp
-    pch/stdafx.cpp
   )
+  
+  set (PCH
+	pch/stdafx.cpp
+  )
+  
+  set(SOURCES 
+    ${SOURCES_WIN} ${PCH})
+  
   set(EXTRALINKS
     bcrypt.lib
     crypt32.lib
     httpapi.lib
     Winhttp.lib
   )
+  
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${WARNINGS}")
   if (${CMAKE_GENERATOR} MATCHES "Visual Studio .*")
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /Yustdafx.h /Zm200")
@@ -81,7 +90,7 @@ elseif(WIN32)
   endif()
 endif()
 
-add_library(${Casablanca_LIBRARY} ${LIB_TYPE} ${SOURCES})
+add_library(${Casablanca_LIBRARY} ${SOURCES})
 
 target_link_libraries(${Casablanca_LIBRARY}
   ${CMAKE_THREAD_LIBS_INIT}
@@ -90,6 +99,8 @@ target_link_libraries(${Casablanca_LIBRARY}
   ${Boost_ATOMIC_LIBRARY}
   ${Boost_CHRONO_LIBRARY}
   ${Boost_RANDOM_LIBRARY}
+  ${Boost_REGEX_LIBRARY}
+  ${Boost_DATE_TIME_LIBRARY}
   ${EXTRALINKS}
   ${Boost_FRAMEWORK}
   ${OPENSSL_LIBRARIES}
