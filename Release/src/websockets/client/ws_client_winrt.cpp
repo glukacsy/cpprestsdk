@@ -243,7 +243,7 @@ public:
             return pplx::task_from_exception<void>(websocket_exception("Message size too large. Ensure message length is less than UINT_MAX."));
         }
 
-        if (++m_num_sends == 1) // No sends in progress
+        if (std::atomic_fetch_add(&m_num_sends, 1) == 0) // No sends in progress
         {
             // Start sending the message
             send_msg(msg);
@@ -385,7 +385,7 @@ public:
                 msg.signal_body_sent();
             }
 
-            if (--this_client->m_num_sends > 0)
+            if (std::atomic_fetch_sub(&this_client->m_num_sends, 1) > 1)
             {
                 // Only hold the lock when actually touching the queue.
                 websocket_outgoing_message next_msg;
