@@ -92,6 +92,8 @@ static std::string build_error_msg(const std::error_code &ec, const std::string 
 
 static utility::string_t g_subProtocolHeader(_XPLATSTR("Sec-WebSocket-Protocol"));
 
+
+
 class wspp_callback_client : public websocket_client_callback_impl, public std::enable_shared_from_this<wspp_callback_client>
 {
 private:
@@ -439,7 +441,7 @@ public:
         }
 
         {
-            if (++m_num_sends == 1) // No sends in progress
+            if (std::atomic_fetch_add(&m_num_sends, 1) == 0) // No sends in progress
             {
                 // Start sending the message
                 send_msg(msg);
@@ -585,7 +587,7 @@ public:
                 msg.signal_body_sent();
             }
 
-            if (--this_client->m_num_sends > 0)
+            if (std::atomic_fetch_sub(&this_client->m_num_sends, 1) > 1)
             {
                 // Only hold the lock when actually touching the queue.
                 websocket_outgoing_message next_msg;
