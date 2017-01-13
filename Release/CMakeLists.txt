@@ -110,7 +110,7 @@ elseif(WIN32)
   
    add_definitions(-DUNICODE -D_UNICODE)
    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /bigobj /Zi /DEBUG")
-   set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /${RuntimeLib} /O1 ")
+   set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} /${RuntimeLib} /O1 /Oi /Gy")
    set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} /${RuntimeLib}d /Od" )
 
   if(NOT BUILD_SHARED_LIBS)
