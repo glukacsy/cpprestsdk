@@ -52,6 +52,34 @@
 
 using boost::asio::ip::tcp;
 
+Logger *logger = nullptr;
+
+
+void log(const std::string& logmsg)
+{
+    if (logger)
+    {
+        logger->log(logmsg);
+    }
+}
+
+void log(const std::string& logmsg, void* v)
+{
+    if (logger)
+    {
+        logger->log(logmsg, v);
+    }
+}
+
+void log(const std::string& logmsg, void* v, void* v2)
+{
+    if (logger)
+    {
+        logger->log(logmsg, v, v2);
+    }
+}
+
+
 namespace web { namespace http
 {
 namespace client
@@ -697,6 +725,7 @@ public:
                 auto tcp_port = proxy_type == http_proxy_type::http ? proxy_port : port;
                     
                 tcp::resolver::query query(tcp_host, utility::conversions::print_string(tcp_port, std::locale::classic()));
+                log("cpprest_extra_log: start resolving url:" + tcp_host + ":" + Logger::toString(tcp_port), ctx->m_connection.get());
                 auto client = std::static_pointer_cast<asio_client>(ctx->m_http_client);
                 client->m_resolver.async_resolve(query, boost::bind(&asio_context::handle_resolve, ctx, boost::asio::placeholders::error, boost::asio::placeholders::iterator));
             }
@@ -809,6 +838,7 @@ private:
         m_timer.reset();
         if (!ec)
         {
+            log("cpprest_extra_log: connected ", m_connection.get());
             write_request();
         }
         else if (ec.value() == boost::system::errc::operation_canceled)
@@ -823,7 +853,10 @@ private:
         {
             // Replace the connection. This causes old connection object to go out of scope.
             auto client = std::static_pointer_cast<asio_client>(m_http_client);
+            auto old_connection = m_connection;
+            
             m_connection = client->m_pool.obtain();
+            log("cpprest_extra_log: connection replaced", m_connection.get(), old_connection.get());
 
             auto endpoint = *endpoints;
             m_connection->async_connect(endpoint, boost::bind(&asio_context::handle_connect, shared_from_this(), boost::asio::placeholders::error, ++endpoints));
@@ -840,12 +873,14 @@ private:
         {
             m_timer.reset();
             auto endpoint = *endpoints;
+            log("cpprest_extra_log: host resolved ", m_connection.get());
             m_connection->async_connect(endpoint, boost::bind(&asio_context::handle_connect, shared_from_this(), boost::asio::placeholders::error, ++endpoints));
         }
     }
 
     void write_request()
     {
+        log("cpprest_extra_log: start writing request", m_connection.get());
         // Only perform handshake if a TLS connection and not being reused.
         if (m_connection->is_ssl() && !m_connection->is_reused())
         {

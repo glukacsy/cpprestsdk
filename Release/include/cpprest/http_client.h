@@ -42,6 +42,7 @@ typedef void* native_handle;}}}
 
 #include <memory>
 #include <limits>
+#include <sstream>
 
 #include "pplx/pplxtasks.h"
 #include "cpprest/http_msg.h"
@@ -67,6 +68,41 @@ typedef void* native_handle;}}}
 #pragma clang diagnostic pop
 #endif
 #endif
+
+class Logger
+{
+public:
+    static std::string toString(int a)
+    {
+        std::stringstream ss;
+        
+        ss << a;
+        
+        return ss.str();
+    }
+    
+    virtual void log(const std::string& logmsg) = 0;
+    
+    void log(const std::string& logmsg, void* v)
+    {
+        std::stringstream ss;
+        
+        ss << logmsg << " connection: " << v;
+        
+        log(ss.str());
+    }
+    
+    void log(const std::string& logmsg, void* v, void* v2)
+    {
+        std::stringstream ss;
+        
+        ss << logmsg << " connection: " << v << " old connection: " << v2;
+        
+        log(ss.str());
+    }
+};
+
+extern Logger *logger;
 
 /// The web namespace contains functionality common to multiple protocols like HTTP and WebSockets.
 namespace web
