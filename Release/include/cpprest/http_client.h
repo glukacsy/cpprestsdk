@@ -56,6 +56,9 @@ typedef void* native_handle;}}}
 #endif
 #endif
 
+
+
+
 /// The web namespace contains functionality common to multiple protocols like HTTP and WebSockets.
 namespace web
 {
@@ -85,6 +88,7 @@ public:
         m_guarantee_order(false),
         m_timeout(std::chrono::seconds(30)),
         m_chunksize(0),
+        m_enableFastIpv4Fallback(true),
         m_request_compressed(false)
 #if !defined(__cplusplus_winrt)
         , m_validate_certificates(true)
@@ -220,6 +224,25 @@ public:
     void set_timeout(const T &timeout)
     {
         m_timeout = std::chrono::duration_cast<std::chrono::microseconds>(timeout);
+    }
+    
+    /// <summary>
+    /// Set Enable/Disable fast IPV4 fallback
+    /// </summary>
+    /// <param name="enabled">Fast IPV4 fallback state</param>
+    /// <remarks>This function works only for non-windows platforms</remarks>
+    void set_enableFastIpv4Fallback(bool enabled)
+    {
+        m_enableFastIpv4Fallback = enabled;
+    }
+    
+    /// <summary>
+    /// Get fast IPV4 fallback state
+    /// </summary>
+    /// <remarks>This function works only for non-windows platforms</remarks>
+    bool enableFastIpv4Fallback() const
+    {
+        return m_enableFastIpv4Fallback;
     }
 
     /// <summary>
@@ -439,6 +462,7 @@ private:
     std::chrono::microseconds m_timeout;
     size_t m_chunksize;
     bool m_request_compressed;
+    bool m_enableFastIpv4Fallback;
 
 #if !defined(__cplusplus_winrt)
     // IXmlHttpRequest2 doesn't allow configuration of certificate verification.

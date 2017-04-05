@@ -22,12 +22,12 @@
 class DealerTable : public BJTable
 {
 public:
-    DealerTable() : m_currentPlayer(0),m_betsMade(0),m_betting(true)
+    DealerTable() : m_betting(true), m_currentPlayer(0), m_betsMade(0)
     { 
         _init();
         FillShoe(6); 
     }
-    DealerTable(int id, size_t capacity, int decks) : BJTable(id, capacity), m_currentPlayer(0), m_betsMade(0),m_betting(true)
+    DealerTable(int id, size_t capacity, int decks) : BJTable(id, capacity), m_betting(true), m_currentPlayer(0), m_betsMade(0)
     { 
         _init(); 
         FillShoe(decks); 

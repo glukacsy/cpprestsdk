@@ -28,6 +28,7 @@ set(SOURCES
   to_string_tests.cpp
   http_client_fuzz_tests.cpp
   stdafx.cpp
+  fast_ipv4_fallback_tests.cpp
 )
 
 if(NOT WIN32)
