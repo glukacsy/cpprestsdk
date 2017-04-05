@@ -101,7 +101,7 @@ struct BJHand
     BJHandState state;
     BJHandResult result;
 
-    BJHand() : state(HR_Empty), result(HR_None), bet(0.0), insurance(0), revealBoth(true) {}
+    BJHand() : bet(0.0), state(HR_Empty), revealBoth(true), result(HR_None), insurance(0) {}
 
     void Clear() { cards.clear(); state = HR_Empty; result = HR_None; insurance = 0.0; }
 

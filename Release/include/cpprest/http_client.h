@@ -68,6 +68,9 @@ typedef void* native_handle;}}}
 #endif
 #endif
 
+
+
+
 /// The web namespace contains functionality common to multiple protocols like HTTP and WebSockets.
 namespace web
 {
@@ -96,6 +99,7 @@ public:
     http_client_config() :
         m_guarantee_order(false),
         m_timeout(std::chrono::seconds(30)),
+        m_enableHappyEyeballs(true),
         m_chunksize(0),
         m_request_compressed(false)
 #if !defined(__cplusplus_winrt)
@@ -233,6 +237,16 @@ public:
     void set_timeout(const T &timeout)
     {
         m_timeout = std::chrono::duration_cast<std::chrono::microseconds>(timeout);
+    }
+    
+    void set_enableHappyEyeballs(bool enabled)
+    {
+        m_enableHappyEyeballs = enabled;
+    }
+    
+    bool enableHappyEyeballs() const
+    {
+        return m_enableHappyEyeballs;
     }
 
     /// <summary>
@@ -429,6 +443,7 @@ private:
     std::chrono::microseconds m_timeout;
     size_t m_chunksize;
     bool m_request_compressed;
+    bool m_enableHappyEyeballs;
 
 #if !defined(__cplusplus_winrt)
     // IXmlHttpRequest2 doesn't allow configuration of certificate verification.

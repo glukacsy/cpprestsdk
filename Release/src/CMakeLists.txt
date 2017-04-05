@@ -9,6 +9,7 @@ set(SOURCES_COMMON
   http/client/x509_cert_utilities.cpp
   http/common/http_helpers.cpp
   http/common/http_msg.cpp
+  http/common/happy_eyeballs.cpp
   http/listener/http_listener.cpp
   http/listener/http_listener_msg.cpp
   http/listener/http_server_api.cpp
@@ -24,6 +25,7 @@ set(SOURCES_COMMON
   utilities/asyncrt_utils.cpp
   utilities/base64.cpp
   utilities/web_utilities.cpp
+  utilities/cpprest_logger.cpp
   websockets/client/ws_msg.cpp
   websockets/client/ws_client.cpp
   websockets/client/ws_client_wspp.cpp
