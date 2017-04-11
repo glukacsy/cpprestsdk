@@ -25,7 +25,6 @@ set(SOURCES_COMMON
   utilities/asyncrt_utils.cpp
   utilities/base64.cpp
   utilities/web_utilities.cpp
-  utilities/cpprest_logger.cpp
   websockets/client/ws_msg.cpp
   websockets/client/ws_client.cpp
   websockets/client/ws_client_wspp.cpp

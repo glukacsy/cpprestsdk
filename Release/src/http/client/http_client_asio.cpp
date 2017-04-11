@@ -49,15 +49,11 @@
 #include "cpprest/details/http_helpers.h"
 #include "cpprest/details/happy_eyeballs.h"
 #include "cpprest/details/timeout_timer.h"
-#include "cpprest/cpprest_logger.h"
 #include <unordered_set>
 #include <memory>
 #include <atomic>
 
 using boost::asio::ip::tcp;
-
-
-#define LOG(message) do{ std::stringstream ss; ss << message;  utils::log(ss.str()); }while(0)
 
 namespace web { namespace http
 {
@@ -430,14 +426,15 @@ private:
         
         auto cachedEndpoint = getCache()->get({endpoints->host_name(), endpoints->service_name()});
         
+        // Check if endpoint in cache. If yes use it.
         if ((cachedEndpoint != Cache::value_type()) && execMode == ExecMode::HE_ENABLED)
         {
-            LOG("cpprest: Endpoint cached: " << cachedEndpoint.address());
             auto cachedEndpoints = web::http::details::insertFront(cachedEndpoint, endpoints);
             connect(ExecMode::HE_DISABLED, cachedEndpoints, handler);
             return;
         }
         
+        // Try to connect using ipv6
         auto he_endpoints = execMode == ExecMode::HE_ENABLED ? web::http::details::createHappyEyeballsEndpointList(endpoints) : endpoints;
         if (isValid(he_endpoints) && (he_endpoints)->endpoint().address().is_v6())
         {
@@ -448,6 +445,7 @@ private:
             ++he_endpoints;
         }
         
+        // Try to connectio using ipv4
         if (isValid(he_endpoints) && (he_endpoints)->endpoint().address().is_v4())
         {
             auto connection_ipv4 = client_cast->m_pool.obtain(asio_connection_pool::Type::NEW);
@@ -488,34 +486,6 @@ private:
         }
     }
     
-    std::string toString(tcp::resolver::iterator endpoints)
-    {
-        std::stringstream ss;
-        
-        auto host = endpoints->host_name();
-        auto service = endpoints->service_name();
-        auto address = endpoints->endpoint().address();
-        auto ip = address.to_string();
-        
-        ss << " host: " << host << ":" << service << " ip: " << ip;
-        
-        return ss.str();
-    }
-    
-    std::string toString(void *id, tcp::resolver::iterator endpoints)
-    {
-        std::stringstream ss;
-        
-        auto host = endpoints->host_name();
-        auto service = endpoints->service_name();
-        auto address = endpoints->endpoint().address();
-        auto ip = address.to_string();
-        
-        ss << "id: " << id <<  toString(endpoints);
-        
-        return ss.str();
-    }
-    
     void removePendingConnection(std::shared_ptr<asio_connection> connection)
     {
         pendingConnections.erase(std::remove(pendingConnections.begin(), pendingConnections.end(), connection), pendingConnections.end());
@@ -538,14 +508,11 @@ private:
                     {
                         ScopedLock l(m_lock);
                         
-                        LOG("cpprest: Connected to: host: " << toString(connection.get(), endpoints));
-                        
                         cancelHeTimer();
                     
                         // Cache succesful endpoint only when happy eyeballs was used
                         if (pendingConnections.size() > 1)
                         {
-                            LOG("cpprest: Added to cache host: " << toString(connection.get(), endpoints));
                             getCache()->add({endpoints->host_name(), endpoints->service_name()}, endpoints->endpoint());
                         }
                         pendingConnections.clear();
@@ -566,7 +533,6 @@ private:
                         ScopedLock l(m_lock);
                         removePendingConnection(connection);
                     }
-                    LOG("cpprest: Already connected: host: " << toString(connection.get(), endpoints));
                     break;
             }
         }
@@ -583,7 +549,6 @@ private:
                         removePendingConnection(connection);
                         isLastPendingRequest = pendingConnections.empty() && !m_he_timer;
                     }
-                    LOG("cpprest: Failed to connect: id: " << connection.get());
                     if (isLastPendingRequest)
                     {
                         handler(connection, ec, endpoints);
@@ -604,7 +569,6 @@ private:
                         ScopedLock l(m_lock);
                         removePendingConnection(connection);
                     }
-                    LOG("cpprest: Already connected: id: " << connection.get());
                     break;
             }
         }
@@ -669,7 +633,6 @@ private:
             case ConnectionState::Connecting:
             case ConnectionState::Idle:
             {
-                LOG("cpprest: Connecting to: host: " << toString(connection.get(), endpoints));
                 m_state = ConnectionState::Connecting;
                 pendingConnections.push_back(connection);
                 connection->async_connect(*endpoints, boost::bind(&asio_connection_happy_eyeballs::handle_tcp_connect, shared_from_this(), connection, id, boost::asio::placeholders::error, endpoints, handler));
