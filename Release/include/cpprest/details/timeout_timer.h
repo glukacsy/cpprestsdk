@@ -51,11 +51,6 @@ namespace utils
         void reset()
         {
             ScopedLock l(m_mutex);
-            reset_unlocked();
-        }
-        
-        void reset_unlocked()
-        {
             assert(m_state == started);
             if(m_timer.expires_from_now(m_duration) > 0)
             {
