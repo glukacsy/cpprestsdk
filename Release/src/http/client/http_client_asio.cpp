@@ -77,12 +77,17 @@ enum class httpclient_errorcode_context
     readbody,
     close
 };
-    
-    
-bool isSSLEnabled(std::shared_ptr<_http_client_communicator>& http_client)
+
+static bool isSSLEnabled(const _http_client_communicator* http_client)
 {
-     return http_client->base_uri().scheme() == "https" && !http_client->client_config().proxy().is_specified();
+    return http_client->base_uri().scheme() == "https" && !http_client->client_config().proxy().is_specified();
 }
+    
+static bool isSSLEnabled(std::shared_ptr<_http_client_communicator>& http_client)
+{
+    return isSSLEnabled(http_client.get());
+}
+    
     
 class asio_connection_pool;
 class asio_connection_happy_eyeballs;
@@ -361,7 +366,7 @@ public:
     asio_client(http::uri address, http_client_config client_config)
     : _http_client_communicator(std::move(address), std::move(client_config))
     , m_pool(crossplat::threadpool::shared_instance().service(),
-             isSSLEnabled(),
+             isSSLEnabled(this),
              std::chrono::seconds(30), // Unused sockets are kept in pool for 30 seconds.
              this->client_config().get_ssl_context_callback()) 
     , m_resolver(crossplat::threadpool::shared_instance().service())
@@ -370,12 +375,6 @@ public:
     void send_request(const std::shared_ptr<request_context> &request_ctx) override;
 
     unsigned long open() override { return 0; }
-    
-    // todo: Cache the result
-    bool isSSLEnabled()
-    {
-        return base_uri().scheme() == "https" && !_http_client_communicator::client_config().proxy().is_specified();
-    }
     
     asio_connection_pool m_pool;
     tcp::resolver m_resolver;
@@ -415,11 +414,6 @@ public:
     void cancel()
     {
         ScopedLock l(m_lock);
-        
-        for(auto connection : pendingConnections)
-        {
-            connection->close();
-        }
         
         pendingConnections.clear();
         
@@ -582,12 +576,19 @@ private:
             {
                 case ConnectionState::ConnectedFailed:
                 case ConnectionState::Connecting:
+                {
+                    bool isLastPendingRequest = false;
                     {
                         ScopedLock l(m_lock);
                         removePendingConnection(connection);
+                        isLastPendingRequest = pendingConnections.empty() && !m_he_timer;
                     }
                     LOG("cpprest: Failed to connect: id: " << connection.get());
-                    handler(connection, ec, endpoints);
+                    if (isLastPendingRequest)
+                    {
+                        handler(connection, ec, endpoints);
+                    }
+                }
                     break;
                 case ConnectionState::Idle:
                     // Invalid state at that point
@@ -613,12 +614,23 @@ private:
                 ScopedLock l(m_lock);
                 removePendingConnection(connection);
             }
+
             connect(ExecMode::HE_ENABLED, endpoints, handler);
         }
         else
         {
-            ScopedLock l(m_lock);
-            removePendingConnection(connection);
+            bool isLastPendingRequest = false;
+            {
+                ScopedLock l(m_lock);
+                removePendingConnection(connection);
+                isLastPendingRequest = pendingConnections.empty() && !m_he_timer;
+            }
+            
+            if (isLastPendingRequest)
+            {
+                handler(connection, ec, endpoints);
+            }
+            
         }
     }
     
@@ -823,7 +835,7 @@ public:
             }
             else
             {
-                m_context->m_timer.reset();
+                m_context->m_timer.stop();
                 connect(endpoints);
             }
         }
@@ -833,7 +845,7 @@ public:
             m_context->m_connection = connection;
             if (!ec)
             {
-                m_context->m_timer.reset();
+                m_context->m_timer.start();
                 m_context->m_connection->async_write(m_request, boost::bind(&ssl_proxy_tunnel::handle_write_request, shared_from_this(), boost::asio::placeholders::error));
             }
             else if (endpoints == tcp::resolver::iterator())
@@ -1185,7 +1197,7 @@ private:
 
     void handle_connect(std::shared_ptr<asio_connection>& connection, const boost::system::error_code& ec, tcp::resolver::iterator endpoints)
     {
-        m_timer.reset();
+        m_timer.start();
         m_connection = connection;
         if (!ec)
         {
@@ -1220,7 +1232,7 @@ private:
         }
         else
         {
-            m_timer.reset();
+            m_timer.stop();
             
             connect(endpoints);
         }
@@ -1885,7 +1897,7 @@ private:
 
         void start()
         {
-            assert(m_state == created);
+            assert(m_state == created || m_state == stopped);
             assert(!m_ctx.expired());
             m_state = started;
 
