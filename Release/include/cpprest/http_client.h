@@ -99,8 +99,8 @@ public:
     http_client_config() :
         m_guarantee_order(false),
         m_timeout(std::chrono::seconds(30)),
-        m_enableFastIpv4Fallback(true),
         m_chunksize(0),
+        m_enableFastIpv4Fallback(true),
         m_request_compressed(false)
 #if !defined(__cplusplus_winrt)
         , m_validate_certificates(true)
