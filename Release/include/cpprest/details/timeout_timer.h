@@ -116,7 +116,7 @@ namespace utils
         using ScopedLock = std::unique_lock<std::mutex>;
         
         Duration m_duration;
-        timer_state m_state;
+        timer_state m_state {created};
         boost::asio::steady_timer m_timer;
         CommandHandler m_handler;
         mutable std::mutex m_mutex;

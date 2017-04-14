@@ -47,7 +47,7 @@
 #include "cpprest/details/http_client_impl.h"
 #include "cpprest/details/x509_cert_utilities.h"
 #include "cpprest/details/http_helpers.h"
-#include "cpprest/details/happy_eyeballs.h"
+#include "cpprest/details/fast_ipv4_fallback.h"
 #include "cpprest/details/timeout_timer.h"
 #include <unordered_set>
 #include <memory>
@@ -73,6 +73,8 @@ enum class httpclient_errorcode_context
     readbody,
     close
 };
+    
+const auto fast_ipv4_fallback_delay = std::chrono::milliseconds(300);
 
 static bool isSSLEnabled(const _http_client_communicator* http_client)
 {
@@ -381,10 +383,7 @@ public:
 class asio_connection_happy_eyeballs : public std::enable_shared_from_this<asio_connection_happy_eyeballs>
 {
 public:
-    using Cache = web::http::details::AddressCache;
-    
     using ConnectHandler = boost::function<void(std::shared_ptr<asio_connection>& connection, const boost::system::error_code& ec, tcp::resolver::iterator endpoints)>;
-    enum class ExecMode { HE_DISABLED, HE_ENABLED };
         
     asio_connection_happy_eyeballs(std::shared_ptr<_http_client_communicator> &client, const std::chrono::microseconds& timeout) :
         m_client(client), m_requestsCount(0), m_timeout(timeout), m_state(ConnectionState::Idle)
@@ -400,8 +399,8 @@ public:
     {
         if (auto client = m_client.lock())
         {
-            bool happyEyeballsEnabled = client->client_config().enableHappyEyeballs();
-            auto flag = happyEyeballsEnabled ? ExecMode::HE_ENABLED : ExecMode::HE_DISABLED;
+            bool happyEyeballsEnabled = client->client_config().enableFastIpv4Fallback();
+            auto flag = happyEyeballsEnabled ? ExecMode::enabled : ExecMode::disabled;
             
             connect(flag, endpoints, handler);
         }
@@ -411,13 +410,16 @@ public:
     {
         ScopedLock l(m_lock);
         
+        cancelHeTimer();
         pendingConnections.clear();
         
-        cancelHeTimer();
+        m_state = ConnectionState::Cancelled;
     }
     
 private:
-    enum class ConnectionState {Idle, Connecting, ConnectedSuccess, ConnectedFailed};
+    using Cache = web::http::details::AddressCache;
+    enum class ExecMode { disabled, enabled };
+    enum class ConnectionState {Idle, Connecting, ConnectedSuccess, ConnectedFailed, Cancelled};
     
     void connect(ExecMode execMode, tcp::resolver::iterator endpoints, ConnectHandler handler)
     {
@@ -427,15 +429,15 @@ private:
         auto cachedEndpoint = getCache()->get({endpoints->host_name(), endpoints->service_name()});
         
         // Check if endpoint in cache. If yes use it.
-        if ((cachedEndpoint != Cache::value_type()) && execMode == ExecMode::HE_ENABLED)
+        if ((cachedEndpoint != Cache::value_type()) && execMode == ExecMode::enabled)
         {
             auto cachedEndpoints = web::http::details::insertFront(cachedEndpoint, endpoints);
-            connect(ExecMode::HE_DISABLED, cachedEndpoints, handler);
+            connect(ExecMode::disabled, cachedEndpoints, handler);
             return;
         }
         
         // Try to connect using ipv6
-        auto he_endpoints = execMode == ExecMode::HE_ENABLED ? web::http::details::createHappyEyeballsEndpointList(endpoints) : endpoints;
+        auto he_endpoints = execMode == ExecMode::enabled ? web::http::details::createHappyEyeballsEndpointList(endpoints) : endpoints;
         if (isValid(he_endpoints) && (he_endpoints)->endpoint().address().is_v6())
         {
             auto connection_ipv6 = client_cast->m_pool.obtain(asio_connection_pool::Type::NEW);
@@ -452,7 +454,7 @@ private:
             invokeUserCallback(connection_ipv4);
             if (isIpv6Connecting)
             {
-                if (execMode == ExecMode::HE_ENABLED)
+                if (execMode == ExecMode::enabled)
                 {
                     scheduleConnect(++m_requestsCount, connection_ipv4, he_endpoints, handler);
                 }
@@ -516,8 +518,9 @@ private:
                             getCache()->add({endpoints->host_name(), endpoints->service_name()}, endpoints->endpoint());
                         }
                         pendingConnections.clear();
+                    
+                        handler(connection, ec, endpoints);
                     }
-                    handler(connection, ec, endpoints);
                     break;
                 case ConnectionState::Idle:
                     // Invalid state at that point
@@ -527,6 +530,8 @@ private:
                     }
                     assert(true);
                     break;
+                case ConnectionState::Cancelled:
+                    //fellthrough
                 case ConnectionState::ConnectedSuccess:
                     // It will auto disconnect after we exit this function
                     {
@@ -543,12 +548,9 @@ private:
                 case ConnectionState::ConnectedFailed:
                 case ConnectionState::Connecting:
                 {
-                    bool isLastPendingRequest = false;
-                    {
-                        ScopedLock l(m_lock);
-                        removePendingConnection(connection);
-                        isLastPendingRequest = pendingConnections.empty() && !m_he_timer;
-                    }
+                    ScopedLock l(m_lock);
+                    removePendingConnection(connection);
+                    bool isLastPendingRequest = pendingConnections.empty() && !m_he_timer;
                     if (isLastPendingRequest)
                     {
                         handler(connection, ec, endpoints);
@@ -563,6 +565,8 @@ private:
                     }
                     assert(true);
                     break;
+                case ConnectionState::Cancelled:
+                    //fellthrough
                 case ConnectionState::ConnectedSuccess:
                     // It will auto disconnect after we exit this function
                     {
@@ -579,7 +583,7 @@ private:
                 removePendingConnection(connection);
             }
 
-            connect(ExecMode::HE_ENABLED, endpoints, handler);
+            connect(ExecMode::disabled, endpoints, handler);
         }
         else
         {
@@ -588,13 +592,11 @@ private:
                 ScopedLock l(m_lock);
                 removePendingConnection(connection);
                 isLastPendingRequest = pendingConnections.empty() && !m_he_timer;
+                if (isLastPendingRequest)
+                {
+                    handler(connection, ec, endpoints);
+                }
             }
-            
-            if (isLastPendingRequest)
-            {
-                handler(connection, ec, endpoints);
-            }
-            
         }
     }
     
@@ -638,8 +640,9 @@ private:
                 connection->async_connect(*endpoints, boost::bind(&asio_connection_happy_eyeballs::handle_tcp_connect, shared_from_this(), connection, id, boost::asio::placeholders::error, endpoints, handler));
                 break;
             }
+            case ConnectionState::Cancelled:
+                //fellthroug
             case ConnectionState::ConnectedSuccess:
-                // We are already conected.
                 break;
         }
     }
@@ -667,7 +670,7 @@ private:
     
     static std::shared_ptr<Cache> getCache()
     {
-        static auto cache = std::make_shared<Cache>(crossplat::threadpool::shared_instance().service());
+        static auto cache = Cache::create(crossplat::threadpool::shared_instance().service());
         
         return cache;
     }
@@ -729,7 +732,7 @@ public:
     static std::shared_ptr<request_context> create_request_context(std::shared_ptr<_http_client_communicator> &client, http_request &request)
     {
         auto client_cast(std::static_pointer_cast<asio_client>(client));
-        auto connection_he = std::make_shared<asio_connection_happy_eyeballs>(client, std::chrono::milliseconds(300));
+        auto connection_he = std::make_shared<asio_connection_happy_eyeballs>(client, fast_ipv4_fallback_delay);
         auto connection    = client_cast->m_pool.obtain(asio_connection_pool::Type::REUSED);
         auto ctx = std::make_shared<asio_context>(client, request, connection_he, connection);
         ctx->m_timer.set_ctx(std::weak_ptr<asio_context>(ctx));

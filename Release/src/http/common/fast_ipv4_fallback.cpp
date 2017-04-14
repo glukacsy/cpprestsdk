@@ -1,4 +1,4 @@
-#include <cpprest/details/happy_eyeballs.h>
+#include <cpprest/details/fast_ipv4_fallback.h>
 
 #include <iterator>
 
@@ -86,10 +86,18 @@ bool AddressCache::Key::operator<(const Key& key) const
     return m_key < key.m_key;
 }
 
-    
-AddressCache::AddressCache(boost::asio::io_service& io_service) : m_timer(utils::timeout_timer::create(io_service, utils::timeout_timer::Duration(purgeCacheDelay), createCallback()))
+std::shared_ptr<AddressCache> AddressCache::create(boost::asio::io_service& io_service)
 {
-    m_timer->start();
+    auto instance = std::shared_ptr<AddressCache>(new AddressCache(io_service));
+    
+    instance->m_timer = utils::timeout_timer::create(io_service, utils::timeout_timer::Duration(instance->purgeCacheDelay), instance->createCallback());
+    instance->m_timer->start();
+    
+    return instance;
+}
+    
+AddressCache::AddressCache(boost::asio::io_service& io_service)
+{
 }
         
 AddressCache::~AddressCache()
@@ -98,7 +106,7 @@ AddressCache::~AddressCache()
     m_timer->stop();
 }
         
-void AddressCache::add(const key_type key, const value_type& value)
+void AddressCache::add(const key_type& key, const value_type& value)
 {
     ScopedLock l(m_mutex);
             
@@ -116,13 +124,18 @@ AddressCache::value_type AddressCache::get(const key_type& key) const
     
 std::function<void (utils::timeout_timer *timer)> AddressCache::createCallback()
 {
-    return  [this](utils::timeout_timer *timer)
+    auto weakThis = std::weak_ptr<AddressCache>(shared_from_this());
+    return  [weakThis](utils::timeout_timer *timer)
     {
+        auto sharedThis = weakThis.lock();
+        if (sharedThis)
         {
-            ScopedLock l(m_mutex);
-            storage.clear();
+            {
+                ScopedLock l(sharedThis->m_mutex);
+                sharedThis->storage.clear();
+            }
+            sharedThis->m_timer->retrigger();
         }
-        timer->retrigger();
     };
 }
 }

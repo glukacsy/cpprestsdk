@@ -239,12 +239,21 @@ public:
         m_timeout = std::chrono::duration_cast<std::chrono::microseconds>(timeout);
     }
     
-    void set_enableHappyEyeballs(bool enabled)
+    /// <summary>
+    /// Set Enable/Disable fast IPV4 fallback
+    /// </summary>
+    /// <param name="enabled">Fast IPV4 fallback state</param>
+    /// <remarks>This function works only for non-windows platforms</remarks>
+    void set_enableFastIpv4Fallback(bool enabled)
     {
         m_enableHappyEyeballs = enabled;
     }
     
-    bool enableHappyEyeballs() const
+    /// <summary>
+    /// Get fast IPV4 fallback state
+    /// </summary>
+    /// <remarks>This function works only for non-windows platforms</remarks>
+    bool enableFastIpv4Fallback() const
     {
         return m_enableHappyEyeballs;
     }
