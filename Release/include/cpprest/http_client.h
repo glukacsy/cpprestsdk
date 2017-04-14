@@ -99,7 +99,7 @@ public:
     http_client_config() :
         m_guarantee_order(false),
         m_timeout(std::chrono::seconds(30)),
-        m_enableHappyEyeballs(true),
+        m_enableFastIpv4Fallback(true),
         m_chunksize(0),
         m_request_compressed(false)
 #if !defined(__cplusplus_winrt)
@@ -246,7 +246,7 @@ public:
     /// <remarks>This function works only for non-windows platforms</remarks>
     void set_enableFastIpv4Fallback(bool enabled)
     {
-        m_enableHappyEyeballs = enabled;
+        m_enableFastIpv4Fallback = enabled;
     }
     
     /// <summary>
@@ -255,7 +255,7 @@ public:
     /// <remarks>This function works only for non-windows platforms</remarks>
     bool enableFastIpv4Fallback() const
     {
-        return m_enableHappyEyeballs;
+        return m_enableFastIpv4Fallback;
     }
 
     /// <summary>
@@ -452,7 +452,7 @@ private:
     std::chrono::microseconds m_timeout;
     size_t m_chunksize;
     bool m_request_compressed;
-    bool m_enableHappyEyeballs;
+    bool m_enableFastIpv4Fallback;
 
 #if !defined(__cplusplus_winrt)
     // IXmlHttpRequest2 doesn't allow configuration of certificate verification.
