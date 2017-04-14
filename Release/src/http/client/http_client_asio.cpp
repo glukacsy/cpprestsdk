@@ -302,20 +302,20 @@ public:
         // Otherwise connection is not put to the pool and it will go out of scope.
     }
     
-    enum class Type {NEW, REUSED, ANY};
+    enum class Type {new_connection, reused_connection, any_connection};
 
     std::shared_ptr<asio_connection> obtain(Type type)
     {
         std::unique_lock<std::mutex> lock(m_connections_mutex);
         std::shared_ptr<asio_connection> connection;
-        if ((type == Type::NEW) || (type == Type::ANY && m_connections.empty()))
+        if ((type == Type::new_connection) || (type == Type::any_connection && m_connections.empty()))
         {
             lock.unlock();
 
             // No connections in pool => create a new connection instance.
             connection = std::make_shared<asio_connection>(m_io_service, m_start_with_ssl, m_ssl_context_callback);
         }
-        else if (!m_connections.empty() && ((type == Type::REUSED) || (type == Type::ANY)))
+        else if (!m_connections.empty() && ((type == Type::reused_connection) || (type == Type::any_connection)))
         {
             // Reuse connection from pool.
             connection = m_connections.back();
@@ -440,7 +440,7 @@ private:
         auto he_endpoints = execMode == ExecMode::enabled ? web::http::details::createHappyEyeballsEndpointList(endpoints) : endpoints;
         if (isValid(he_endpoints) && (he_endpoints)->endpoint().address().is_v6())
         {
-            auto connection_ipv6 = client_cast->m_pool.obtain(asio_connection_pool::Type::NEW);
+            auto connection_ipv6 = client_cast->m_pool.obtain(asio_connection_pool::Type::new_connection);
             invokeUserCallback(connection_ipv6);
             connect(++m_requestsCount, connection_ipv6, he_endpoints, handler);
             isIpv6Connecting = static_cast<bool>(connection_ipv6);
@@ -450,7 +450,7 @@ private:
         // Try to connectio using ipv4
         if (isValid(he_endpoints) && (he_endpoints)->endpoint().address().is_v4())
         {
-            auto connection_ipv4 = client_cast->m_pool.obtain(asio_connection_pool::Type::NEW);
+            auto connection_ipv4 = client_cast->m_pool.obtain(asio_connection_pool::Type::new_connection);
             invokeUserCallback(connection_ipv4);
             if (isIpv6Connecting)
             {
@@ -733,7 +733,7 @@ public:
     {
         auto client_cast(std::static_pointer_cast<asio_client>(client));
         auto connection_he = std::make_shared<asio_connection_happy_eyeballs>(client, fast_ipv4_fallback_delay);
-        auto connection    = client_cast->m_pool.obtain(asio_connection_pool::Type::REUSED);
+        auto connection    = client_cast->m_pool.obtain(asio_connection_pool::Type::reused_connection);
         auto ctx = std::make_shared<asio_context>(client, request, connection_he, connection);
         ctx->m_timer.set_ctx(std::weak_ptr<asio_context>(ctx));
         return ctx;
