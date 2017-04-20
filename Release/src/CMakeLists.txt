@@ -9,6 +9,7 @@ set(SOURCES_COMMON
   http/client/x509_cert_utilities.cpp
   http/common/http_helpers.cpp
   http/common/http_msg.cpp
+  http/common/fast_ipv4_fallback.cpp
   http/listener/http_listener.cpp
   http/listener/http_listener_msg.cpp
   http/listener/http_server_api.cpp
