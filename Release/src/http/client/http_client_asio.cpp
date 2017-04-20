@@ -808,7 +808,7 @@ public:
     , m_content_length(0)
     , m_needChunked(false)
     , m_timer(client->client_config().timeout<std::chrono::microseconds>())
-    , m_connection_he(connection_he)
+    , m_connection(connection_he)
 #if defined(__APPLE__) || (defined(ANDROID) || defined(__ANDROID__))
     , m_openssl_failed(false)
 #endif
@@ -818,7 +818,7 @@ public:
     {
         m_timer.stop();
         // Release connection back to the pool. If connection was not closed, it will be put to the pool for reuse.
-        std::static_pointer_cast<asio_client>(m_http_client)->m_pool.release(m_connection_he->connection());
+        std::static_pointer_cast<asio_client>(m_http_client)->m_pool.release(m_connection->connection());
     }
 
     static std::shared_ptr<request_context> create_request_context(std::shared_ptr<_http_client_communicator> &client, http_request &request)
@@ -876,7 +876,7 @@ public:
         void connect(tcp::resolver::iterator endpoints)
         {
             try {
-                m_context->m_connection_he->connect(endpoints, boost::bind(&ssl_proxy_tunnel::handle_tcp_connect, shared_from_this(), boost::placeholders::_1, boost::placeholders::_2, boost::placeholders::_3));
+                m_context->m_connection->connect(endpoints, boost::bind(&ssl_proxy_tunnel::handle_tcp_connect, shared_from_this(), boost::placeholders::_1, boost::placeholders::_2, boost::placeholders::_3));
             }
             catch(...)
             {
@@ -902,7 +902,7 @@ public:
             if (!ec)
             {
                 m_context->m_timer.start();
-                m_context->m_connection_he->async_write(m_request, boost::bind(&ssl_proxy_tunnel::handle_write_request, shared_from_this(), boost::asio::placeholders::error));
+                m_context->m_connection->async_write(m_request, boost::bind(&ssl_proxy_tunnel::handle_write_request, shared_from_this(), boost::asio::placeholders::error));
             }
             else if (endpoints == tcp::resolver::iterator())
             {
@@ -915,7 +915,7 @@ public:
             if (!err)
             {
                 m_context->m_timer.reset();
-                m_context->m_connection_he->async_read_until(m_response, CRLF + CRLF, boost::bind(&ssl_proxy_tunnel::handle_status_line, shared_from_this(), boost::asio::placeholders::error));
+                m_context->m_connection->async_read_until(m_response, CRLF + CRLF, boost::bind(&ssl_proxy_tunnel::handle_status_line, shared_from_this(), boost::asio::placeholders::error));
             }
             else
             {
@@ -949,7 +949,7 @@ public:
                     return;
                 }
                 
-                m_context->m_connection_he->upgrade_to_ssl();
+                m_context->m_connection->upgrade_to_ssl();
                 
                 m_ssl_tunnel_established(m_context);
             }
@@ -959,11 +959,11 @@ public:
                 const bool socket_was_closed((boost::asio::error::eof == ec)
                     || (boost::asio::error::connection_reset == ec)
                     || (boost::asio::error::connection_aborted == ec));
-                if (socket_was_closed && m_context->m_connection_he->is_reused())
+                if (socket_was_closed && m_context->m_connection->is_reused())
                 {
                     // Failed to write to socket because connection was already closed while it was in the pool.
                     // close() here ensures socket is closed in a robust way and prevents the connection from being put to the pool again.
-                    m_context->m_connection_he->close();
+                    m_context->m_connection->close();
             
                     // Create a new context and copy the request object, completion event and
                     // cancellation registration to maintain the old state.
@@ -1125,7 +1125,7 @@ public:
                 ctx->m_timer.start();
             }
                 
-            if ((ctx->m_connection_he && ctx->m_connection_he->is_reused()) || proxy_type == http_proxy_type::ssl_tunnel)
+            if ((ctx->m_connection && ctx->m_connection->is_reused()) || proxy_type == http_proxy_type::ssl_tunnel)
             {
                 // If socket is a reused connection or we're connected via an ssl-tunneling proxy, try to write the request directly. In both cases we have already established a tcp connection.
                 ctx->write_request();
@@ -1154,11 +1154,11 @@ public:
                 {
                     if (auto ctx_lock = ctx_weak.lock())
                     {
-                        ctx_lock->m_connection_he->cancel();
+                        ctx_lock->m_connection->cancel();
                         // Shut down transmissions, close the socket and prevent connection from being pooled.
-                        if (ctx_lock->m_connection_he)
+                        if (ctx_lock->m_connection)
                         {
-                            ctx_lock->m_connection_he->close();
+                            ctx_lock->m_connection->close();
                         }
                     }
                 });
@@ -1186,7 +1186,7 @@ public:
     void report_exception(std::exception_ptr exceptionPtr) override
     {
         // Don't recycle connections that had an error into the connection pool.
-        m_connection_he->cancel();
+        m_connection->cancel();
         request_context::report_exception(exceptionPtr);
     }
 
@@ -1270,7 +1270,7 @@ private:
     void connect(tcp::resolver::iterator endpoints)
     {
         try {
-            m_connection_he->connect(endpoints, boost::bind(&asio_context::handle_connect, shared_from_this(), boost::placeholders::_1, boost::placeholders::_2, boost::placeholders::_3));
+            m_connection->connect(endpoints, boost::bind(&asio_context::handle_connect, shared_from_this(), boost::placeholders::_1, boost::placeholders::_2, boost::placeholders::_3));
         }
         catch(...)
         {
@@ -1295,10 +1295,10 @@ private:
     void write_request()
     {
         // Only perform handshake if a TLS connection and not being reused.
-        if (m_connection_he->is_ssl() && !m_connection_he->is_reused())
+        if (m_connection->is_ssl() && !m_connection->is_reused())
         {
             const auto weakCtx = std::weak_ptr<asio_context>(shared_from_this());
-            m_connection_he->async_handshake(boost::asio::ssl::stream_base::client,
+            m_connection->async_handshake(boost::asio::ssl::stream_base::client,
                                           m_http_client->client_config(),
                                           m_http_client->base_uri().host(),
                                           boost::bind(&asio_context::handle_handshake, shared_from_this(), boost::asio::placeholders::error),
@@ -1317,7 +1317,7 @@ private:
         }
         else
         {
-            m_connection_he->async_write(m_body_buf, boost::bind(&asio_context::handle_write_headers, shared_from_this(), boost::asio::placeholders::error));
+            m_connection->async_write(m_body_buf, boost::bind(&asio_context::handle_write_headers, shared_from_this(), boost::asio::placeholders::error));
         }
     }
 
@@ -1325,7 +1325,7 @@ private:
     {
         if (!ec)
         {
-            m_connection_he->async_write(m_body_buf, boost::bind(&asio_context::handle_write_headers, shared_from_this(), boost::asio::placeholders::error));
+            m_connection->async_write(m_body_buf, boost::bind(&asio_context::handle_write_headers, shared_from_this(), boost::asio::placeholders::error));
         }
         else
         {
@@ -1443,12 +1443,12 @@ private:
 
             if (readSize != 0)
             {
-                this_request->m_connection_he->async_write(this_request->m_body_buf,
+                this_request->m_connection->async_write(this_request->m_body_buf,
                                                         boost::bind(&asio_context::handle_write_chunked_body, this_request, boost::asio::placeholders::error));
             }
             else
             {
-                this_request->m_connection_he->async_write(this_request->m_body_buf,
+                this_request->m_connection->async_write(this_request->m_body_buf,
                                                         boost::bind(&asio_context::handle_write_body, this_request, boost::asio::placeholders::error));
             }
         });
@@ -1492,7 +1492,7 @@ private:
                 }
                 this_request->m_uploaded += static_cast<uint64_t>(actualReadSize);
                 this_request->m_body_buf.commit(actualReadSize);
-                this_request->m_connection_he->async_write(this_request->m_body_buf, boost::bind(&asio_context::handle_write_large_body, this_request, boost::asio::placeholders::error));
+                this_request->m_connection->async_write(this_request->m_body_buf, boost::bind(&asio_context::handle_write_large_body, this_request, boost::asio::placeholders::error));
             }
             catch (...)
             {
@@ -1522,7 +1522,7 @@ private:
             }
 
             // Read until the end of entire headers
-            m_connection_he->async_read_until(m_body_buf, CRLF + CRLF, boost::bind(&asio_context::handle_status_line, shared_from_this(), boost::asio::placeholders::error));
+            m_connection->async_read_until(m_body_buf, CRLF + CRLF, boost::bind(&asio_context::handle_status_line, shared_from_this(), boost::asio::placeholders::error));
         }
         else
         {
@@ -1565,11 +1565,11 @@ private:
             const bool socket_was_closed((boost::asio::error::eof == ec)
                                          || (boost::asio::error::connection_reset == ec)
                                          || (boost::asio::error::connection_aborted == ec));
-            if (socket_was_closed && m_connection_he->is_reused())
+            if (socket_was_closed && m_connection->is_reused())
             {
                 // Failed to write to socket because connection was already closed while it was in the pool.
                 // close() here ensures socket is closed in a robust way and prevents the connection from being put to the pool again.
-                m_connection_he->close();
+                m_connection->close();
 
                 // Create a new context and copy the request object, completion event and
                 // cancellation registration to maintain the old state.
@@ -1616,7 +1616,7 @@ private:
                     // so connection is explicitly closed only if we get "Connection: close".
                     // We don't handle HTTP/1.0 server here. HTTP/1.0 server would need
                     // to respond using 'Connection: Keep-Alive' every time.
-                    m_connection_he->set_keep_alive(!boost::iequals(value, U("close")));
+                    m_connection->set_keep_alive(!boost::iequals(value, U("close")));
                 }
                 
                 m_response.headers().add(std::move(name), std::move(value));
@@ -1674,7 +1674,7 @@ private:
             }
             else
             {
-                m_connection_he->async_read_until(m_body_buf, CRLF, boost::bind(&asio_context::handle_chunk_header, shared_from_this(), boost::asio::placeholders::error));
+                m_connection->async_read_until(m_body_buf, CRLF, boost::bind(&asio_context::handle_chunk_header, shared_from_this(), boost::asio::placeholders::error));
             }
         }
     }
@@ -1688,7 +1688,7 @@ private:
             size_to_read = size - m_body_buf.size();
         }
 
-        m_connection_he->async_read(m_body_buf, boost::asio::transfer_exactly(size_to_read), handler);
+        m_connection->async_read(m_body_buf, boost::asio::transfer_exactly(size_to_read), handler);
     }
 
     void handle_chunk_header(const boost::system::error_code& ec)
@@ -1769,7 +1769,7 @@ private:
                     if (decompressed.empty())
                     {
                         m_body_buf.consume(to_read + CRLF.size()); // consume crlf
-                        m_connection_he->async_read_until(m_body_buf, CRLF, boost::bind(&asio_context::handle_chunk_header, this_request, boost::asio::placeholders::error));
+                        m_connection->async_read_until(m_body_buf, CRLF, boost::bind(&asio_context::handle_chunk_header, this_request, boost::asio::placeholders::error));
                     }
                     else
                     {
@@ -1780,7 +1780,7 @@ private:
                             try
                             {
                                 this_request->m_body_buf.consume(to_read + CRLF.size()); // consume crlf
-                                this_request->m_connection_he->async_read_until(this_request->m_body_buf, CRLF, boost::bind(&asio_context::handle_chunk_header, this_request, boost::asio::placeholders::error));
+                                this_request->m_connection->async_read_until(this_request->m_body_buf, CRLF, boost::bind(&asio_context::handle_chunk_header, this_request, boost::asio::placeholders::error));
                             }
                             catch (...)
                             {
@@ -1804,7 +1804,7 @@ private:
                             return;
                         }
                         this_request->m_body_buf.consume(to_read + CRLF.size()); // consume crlf
-                        this_request->m_connection_he->async_read_until(this_request->m_body_buf, CRLF, boost::bind(&asio_context::handle_chunk_header, this_request, boost::asio::placeholders::error));
+                        this_request->m_connection->async_read_until(this_request->m_body_buf, CRLF, boost::bind(&asio_context::handle_chunk_header, this_request, boost::asio::placeholders::error));
                     }); 
                 }
             }
@@ -1999,7 +1999,7 @@ private:
                 {
                     assert(shared_ctx->m_timer.m_state != timedout);
                     shared_ctx->m_timer.m_state = timedout;
-                    shared_ctx->m_connection_he->cancel();
+                    shared_ctx->m_connection->cancel();
                 }
             }
         }
@@ -2027,7 +2027,7 @@ private:
     bool m_needChunked;
     timeout_timer m_timer;
     boost::asio::streambuf m_body_buf;
-    std::shared_ptr<asio_connection_happy_eyeballs> m_connection_he;
+    std::shared_ptr<asio_connection_happy_eyeballs> m_connection;
     
     std::unique_ptr<web::http::details::compression::stream_decompressor> m_decompressor;
 
