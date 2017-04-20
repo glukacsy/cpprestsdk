@@ -208,23 +208,6 @@ public:
                 {
                     using namespace web::http::client::details;
 
-                    auto pinningCallback = [this](const std::string& host, const std::string& key) {
-                        return m_config.invoke_pinning_callback(host, key);
-                    };
-
-                    auto rejectedCertsCallback = [this](json::value certChainInfo) {
-                        m_config.invoke_rejected_certs_chain_callback(certChainInfo);
-                    };
-                    
-                    auto host = utility::conversions::to_utf8string(m_uri.host());
-
-                    auto certPinned = is_certificate_pinned(host, verifyCtx, pinningCallback, rejectedCertsCallback);
-
-                    if (!certPinned)
-                    {
-                        return false;
-                    }
-
 #if defined(__APPLE__) || (defined(ANDROID) || defined(__ANDROID__)) || defined(_WIN32)
                     // On OS X, iOS, and Android, OpenSSL doesn't have access to where the OS
                     // stores keychains. If OpenSSL fails we will doing verification at the
@@ -236,11 +219,30 @@ public:
                     }
                     if(m_openssl_failed)
                     {
-                        return http::client::details::verify_cert_chain_platform_specific(verifyCtx, utility::conversions::to_utf8string(m_uri.host()));
+
+                        if (!http::client::details::is_end_certificate_in_chain(verifyCtx))
+                        {
+                            // Continue until we get the end certificate.
+                            return true;
+                        }
+
+                        if (!http::client::details::verify_cert_chain_platform_specific(verifyCtx, utility::conversions::to_utf8string(m_uri.host())))
+                        {
+                            return false;
+                        }
+                        else
+                        {
+                            return m_config.invoke_certificate_chain_callback(m_uri.host(), get_X509_cert_chain_encoded_data(verifyCtx));
+                        }
                     }
 #endif
                     boost::asio::ssl::rfc2818_verification rfc2818(utility::conversions::to_utf8string(m_uri.host()));
-                    return rfc2818(preverified, verifyCtx);
+                    if (!rfc2818(preverified, verifyCtx))
+                    {
+                        return false;
+                    }
+
+                    return m_config.invoke_certificate_chain_callback(m_uri.host(), get_X509_cert_chain_encoded_data(verifyCtx));
                 });
 
 #if OPENSSL_VERSION_NUMBER < 0x10100000L

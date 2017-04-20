@@ -39,6 +39,8 @@ using namespace utility;
 
 #ifndef __linux__
 
+bool is_end_certificate_in_chain(boost::asio::ssl::verify_context &verifyCtx);
+
 /// <summary>
 /// Using platform specific APIs verifies server certificate.
 /// Currently implemented to work on iOS, Android, and OS X.
@@ -52,18 +54,7 @@ bool verify_X509_cert_chain(const std::vector<std::string> &certChain, const std
 
 #endif
 
-using PinningCallBackFunction = std::function<bool(const std::string&, const std::string&)>;
-using RejectedCertsCallback = std::function<void(json::value)>;
-
-bool is_certificate_pinned(const std::string& host, boost::asio::ssl::verify_context &verifyCtx, PinningCallBackFunction pinningCallback, RejectedCertsCallback rejectedCertsCallback = nullptr);
-
-json::value get_cert_chain_information(boost::asio::ssl::verify_context &verifyCtx);
-
-utility::string_t get_fingerprint_from_cert(const X509* cert);
-
-utility::string_t get_subject_from_cert(X509* cert);
-
-utility::string_t get_issuer_from_cert(X509* cert);
+std::vector<std::vector<unsigned char>> get_X509_cert_chain_encoded_data(boost::asio::ssl::verify_context &verifyCtx);
 
 }}}}
 

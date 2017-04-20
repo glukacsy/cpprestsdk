@@ -197,7 +197,7 @@ public:
     // Registration for cancellation notification if enabled.
     pplx::cancellation_token_registration m_cancellationRegistration;
 
-    bool m_certificate_pinning_failed{ false };
+    bool m_certificate_chain_verification_failed{ false };
 
 protected:
 

@@ -72,7 +72,7 @@ namespace client
 using web::credentials;
 using web::web_proxy;
 
-using PinningCallBackFunction = std::function<bool(const utility::string_t&, const utility::string_t&)>;
+using CertificateChainCallBackFunction = std::function<bool(const utility::string_t&, const std::vector<std::vector<unsigned char>>&)>;
 
 /// <summary>
 /// HTTP client configuration class, used to set the possible configuration options
@@ -89,7 +89,7 @@ public:
 #if !defined(__cplusplus_winrt)
         , m_validate_certificates(true)
 #endif
-		, m_certificate_pinning_callback([](const utility::string_t&, const utility::string_t&)->bool { return true; }) // by default certificate pinning returns success
+        , m_certificate_chain_callback([](const utility::string_t&, const std::vector<std::vector<unsigned char>>&)->bool { return true; })  // by default certificate chain callback returns success.
 		, m_set_user_nativehandle_options([](native_handle)->void {})
 #if !defined(_WIN32) && !defined(__cplusplus_winrt) || defined(CPPREST_FORCE_HTTP_CLIENT_ASIO)
         , m_ssl_context_callback([](boost::asio::ssl::context&)->void{})
@@ -354,7 +354,7 @@ public:
     /// <param name="callback">A user callback allowing for customization of the request</param>
     void set_nativehandle_options(const std::function<void(native_handle)> &callback)
     {
-         m_set_user_nativehandle_options = callback;
+        m_set_user_nativehandle_options = callback;
     }
 
     /// <summary>
@@ -367,25 +367,25 @@ public:
             m_set_user_nativehandle_options(handle);
     }
 
-	/// <summary>
-	/// Set the certificate pinning callback. If set, HTTP client will call this callback in a blocking manner during HTTP connection.
-	/// </summary>
-	void set_user_certificate_pinning_callback(const PinningCallBackFunction& callback)
-	{
-		m_certificate_pinning_callback = callback;
-	}
 
-	/// <summary>
-	/// Invokes the certificate pinning callback.
-	/// </summary>
-	/// <param name="url">The URL in the actual TLS session which might be different than the original URL due to redirection.</param>
-	/// <param name="certificate">The public key of one of the certificate in the chain presented to the consumer for validation purposes.</param>
-	/// <returns>True if the consumer code validated the certificate, false otherwise. False will terminate the HTTP connection.</returns>
-	bool invoke_pinning_callback(const utility::string_t& url, const utility::string_t& public_key) const
-	{
-		return m_certificate_pinning_callback(url, public_key);
-	}
+    /// <summary>
+    /// Set the certificate chain callback. If set, HTTP client will call this callback in a blocking manner during HTTP connection.
+    /// </summary>
+    void set_user_certificate_chain_callback(const CertificateChainCallBackFunction& callback)
+    {
+        m_certificate_chain_callback = callback;
+    }
 
+    /// <summary>
+    /// Invokes the certificate chain callback.
+    /// </summary>
+    /// <param name="url">The URL in the actual TLS session which might be different than the original URL due to redirection.</param>
+    /// <param name="certificate">The cert_chain is the encoded data of the certificate chain, used by the client for validation purposes however it wants.</param>
+    /// <returns>True if the consumer code allows the connection, false otherwise. False will terminate the HTTP connection.</returns>
+    bool invoke_certificate_chain_callback(const utility::string_t& url, const std::vector<std::vector<unsigned char>>& cert_chain) const
+    {
+        return m_certificate_chain_callback(url, cert_chain);
+    }
 
 #if !defined(_WIN32) && !defined(__cplusplus_winrt) || defined(CPPREST_FORCE_HTTP_CLIENT_ASIO)
     /// <summary>
@@ -445,7 +445,7 @@ private:
     bool m_validate_certificates;
 #endif
 
-	PinningCallBackFunction m_certificate_pinning_callback;
+    CertificateChainCallBackFunction m_certificate_chain_callback;
     std::function<void(native_handle)> m_set_user_nativehandle_options;
 	std::function<void(native_handle)> m_set_user_nativesessionhandle_options;
 
