@@ -877,19 +877,6 @@ private:
         }
     }
 
-	static utility::string_t getCertificateString(BYTE* publicKey, DWORD size)
-	{
-		// obtain public key of certificate as string
-		std::stringstream stream;
-		stream << std::hex;
-		for (size_t i = 0; i < size; ++i)
-		{
-			stream << std::setw(2) << std::setfill('0') << (int)((unsigned char*)publicKey)[i];
-		}
-
-		return utility::conversions::to_string_t(stream.str());
-	}
-
     // Returns true if we handle successfully and resending the request
     // or false if we fail to handle.
     static bool handle_authentication_failure(
@@ -1005,65 +992,6 @@ private:
         return true;
     }
 
-    static utility::string_t get_string_from_certificate(PCCERT_CONTEXT pCertContext, DWORD dwType, DWORD dwFlags)
-    {
-        utility::string_t propertieString;
-
-        DWORD cbSize = CertGetNameStringW(
-            pCertContext,
-            dwType,
-            dwFlags,
-            NULL,
-            NULL,
-            0);
-
-        if (cbSize)
-        {
-            std::vector<wchar_t> buffer;
-            buffer.resize(cbSize);
-            if (CertGetNameStringW(
-                pCertContext,
-                dwType,
-                dwFlags,
-                NULL,
-                &buffer[0],
-                cbSize))
-            {
-                propertieString = utility::string_t(&buffer[0]);
-            }
-        }
-        return propertieString;
-    }
-
-    static utility::string_t get_fingerprint_from_certificate(PCCERT_CONTEXT pCertContext)
-    {
-        DWORD size = 0;
-        utility::string_t fingerPrintString;
-
-        HRESULT result = CertGetCertificateContextProperty(pCertContext, CERT_HASH_PROP_ID, NULL, &size);
-        if (!FAILED(result))
-        {
-            std::vector<BYTE> buffer;
-            buffer.resize(size);
-
-            result = CertGetCertificateContextProperty(pCertContext, CERT_HASH_PROP_ID, &buffer[0], &size);
-            if (!FAILED(result))
-            {
-                std::stringstream ss;
-                ss << std::hex << std::setw(2) << std::setfill('0');
-                for (const auto& i : buffer)
-                {
-                    char str[3];
-                    _snprintf_s(str, sizeof(str) - 1, "%02x", static_cast<int>(i));
-                    ss << str;
-                }
-                auto fPrint = ss.str(); 
-                fingerPrintString = utility::string_t(fPrint.begin(), fPrint.end());
-            }
-        }
-        return fingerPrintString;
-    }
-
     // Callback used with WinHTTP to listen for async completions.
     static void CALLBACK completion_callback(
         HINTERNET hRequestHandle,
@@ -1100,136 +1028,93 @@ private:
                             return;
                         }
                     }
-                    // If cert pinning error was recored, report the correct error.
-                    if (p_request_context->m_certificate_pinning_failed)
+                    // Check if connection rejected the certificate.
+                    if (p_request_context->m_certificate_chain_verification_failed)
                     {
-                        p_request_context->report_error(make_error_code(std::errc::operation_not_permitted).value(), "WinHttpCertPinningFailed");
+                        p_request_context->report_error(ERROR_WINHTTP_SECURE_FAILURE, build_error_msg(ERROR_WINHTTP_SECURE_FAILURE, "WinHttpVerificationFailed"));
                         break;
                     }
                     p_request_context->report_error(errorCode, build_error_msg(error_result));
                     break;
                 }
 			case WINHTTP_CALLBACK_STATUS_SENDING_REQUEST:
-				{
-					// get actual URL which might be different from the original one due to redirection etc.
-					DWORD urlSize{ 0 };
-					WinHttpQueryOption(hRequestHandle, WINHTTP_OPTION_URL, NULL, &urlSize);
-					auto urlwchar = new WCHAR[urlSize/sizeof(WCHAR)];
+            {
+                // get actual URL which might be different from the original one due to redirection etc.
+                DWORD urlSize{ 0 };
+                WinHttpQueryOption(hRequestHandle, WINHTTP_OPTION_URL, NULL, &urlSize);
+                auto urlwchar = new WCHAR[urlSize / sizeof(WCHAR)];
 
-					WinHttpQueryOption(hRequestHandle, WINHTTP_OPTION_URL, (void*)urlwchar, &urlSize);
-					utility::string_t url(urlwchar);
+                WinHttpQueryOption(hRequestHandle, WINHTTP_OPTION_URL, (void*)urlwchar, &urlSize);
+                utility::string_t url(urlwchar);
 
-					delete[] urlwchar;
+                delete[] urlwchar;
 
-					// obtain leaf cert based on which we will be able to build the certificate chain
-					PCCERT_CONTEXT pCert{ nullptr };
-					DWORD dwSize = sizeof(pCert);
+                // obtain leaf cert based on which we will be able to build the certificate chain
+                PCCERT_CONTEXT pCert{ nullptr };
+                DWORD dwSize = sizeof(pCert);
 
-					WinHttpQueryOption(hRequestHandle, WINHTTP_OPTION_SERVER_CERT_CONTEXT, &pCert, &dwSize);
+                WinHttpQueryOption(hRequestHandle, WINHTTP_OPTION_SERVER_CERT_CONTEXT, &pCert, &dwSize);
 
-					if (pCert)
-					{
-						std::vector<utility::string_t> certificates;
-                        cert_chain_info certificatesInfo;
+                std::vector<std::vector<unsigned char>> cert_chain;
 
-						CERT_ENHKEY_USAGE keyUsage = {};
-						keyUsage.cUsageIdentifier = 0;
-						keyUsage.rgpszUsageIdentifier = NULL;
+                if (pCert)
+                {
+                    CERT_ENHKEY_USAGE keyUsage = {};
+                    keyUsage.cUsageIdentifier = 0;
+                    keyUsage.rgpszUsageIdentifier = NULL;
 
-						CERT_USAGE_MATCH certUsage = {};
-						certUsage.dwType = USAGE_MATCH_TYPE_AND;
-						certUsage.Usage = keyUsage;
+                    CERT_USAGE_MATCH certUsage = {};
+                    certUsage.dwType = USAGE_MATCH_TYPE_AND;
+                    certUsage.Usage = keyUsage;
 
-						CERT_CHAIN_PARA chainPara = {};
-						chainPara.cbSize = sizeof(CERT_CHAIN_PARA);
-						chainPara.RequestedUsage = certUsage;
+                    CERT_CHAIN_PARA chainPara = {};
+                    chainPara.cbSize = sizeof(CERT_CHAIN_PARA);
+                    chainPara.RequestedUsage = certUsage;
 
-						PCCERT_CHAIN_CONTEXT pChainContext = {};
+                    PCCERT_CHAIN_CONTEXT pChainContext = {};
 
-						// build the certificate chain relying on the actual intermediate certs returned as part of the TLS session
-						// disable any network operations to fetch certificates
-						auto validChain = CertGetCertificateChain(NULL, pCert, NULL, pCert->hCertStore, &chainPara,
-							CERT_CHAIN_CACHE_ONLY_URL_RETRIEVAL |
-							CERT_CHAIN_REVOCATION_CHECK_CACHE_ONLY |
-							CERT_CHAIN_REVOCATION_CHECK_CHAIN |
-							CERT_CHAIN_CACHE_END_CERT |
-							CERT_CHAIN_DISABLE_AUTH_ROOT_AUTO_UPDATE,
-							NULL, &pChainContext);
+                    // build the certificate chain relying on the actual intermediate certs returned as part of the TLS session
+                    // disable any network operations to fetch certificates
+                    auto validChain = CertGetCertificateChain(NULL, pCert, NULL, pCert->hCertStore, &chainPara,
+                        CERT_CHAIN_CACHE_ONLY_URL_RETRIEVAL |
+                        CERT_CHAIN_REVOCATION_CHECK_CACHE_ONLY |
+                        CERT_CHAIN_REVOCATION_CHECK_CHAIN |
+                        CERT_CHAIN_CACHE_END_CERT |
+                        CERT_CHAIN_DISABLE_AUTH_ROOT_AUTO_UPDATE,
+                        NULL, &pChainContext);
 
-						if (validChain && pChainContext)
-						{
-							// extract all certificates from the the TLS connection
-							for (size_t i = 0; i < pChainContext->cChain; ++i)
-							{
-								auto chain = pChainContext->rgpChain[i];
-								for (size_t j = 0; j < chain->cElement; ++j)
-								{
-									auto chainElement = chain->rgpElement[j];
-									auto cert = chainElement->pCertContext;
-									auto publicKey = cert->pCertInfo->SubjectPublicKeyInfo.PublicKey;
-
-									// remember public key
-									certificates.push_back(getCertificateString(publicKey.pbData, publicKey.cbData));
-
-                                    auto certFingerPrint = get_fingerprint_from_certificate(cert);
-                                    if (!certFingerPrint.empty())
+                    if (validChain && pChainContext)
+                    {
+                        if (pChainContext->TrustStatus.dwErrorStatus == CERT_TRUST_NO_ERROR ||
+                            pChainContext->TrustStatus.dwErrorStatus == CERT_TRUST_REVOCATION_STATUS_UNKNOWN ||
+                            pChainContext->TrustStatus.dwErrorStatus == (CERT_TRUST_IS_OFFLINE_REVOCATION | CERT_TRUST_REVOCATION_STATUS_UNKNOWN))
+                        {
+                            cert_chain.reserve((int)pChainContext->cChain);
+                            for (size_t i = 0; i < pChainContext->cChain; ++i)
+                            {
+                                auto chain = pChainContext->rgpChain[i];
+                                for (size_t j = 0; j < chain->cElement; ++j)
+                                {
+                                    auto chainElement = chain->rgpElement[j];
+                                    auto cert = chainElement->pCertContext;
+                                    if (cert)
                                     {
-                                        auto issuer = get_string_from_certificate(cert, CERT_NAME_SIMPLE_DISPLAY_TYPE, CERT_NAME_ISSUER_FLAG);
-                                        auto subject = get_string_from_certificate(cert, CERT_NAME_SIMPLE_DISPLAY_TYPE, 0);
-                                        certificatesInfo.emplace_back(issuer, subject, certFingerPrint);
-								}
-							}
-						}
-						}
-						else
-						{
-							// failed to build chain, we use what we have (the leaf cert)
-							auto publicKey = pCert->pCertInfo->SubjectPublicKeyInfo.PublicKey;
-							certificates.push_back(getCertificateString(publicKey.pbData, publicKey.cbData));
-						}
-
-						CertFreeCertificateContext(pCert); // we don't need this anymore
-
-						bool pinned{ false };
-						for (const auto& certificate : certificates)
-						{
-							if (p_request_context->m_http_client->client_config().invoke_pinning_callback(url, certificate))
-							{
-								pinned = true;
-								break;
-							}
-						}
-
-						if (validChain)
-						{
-							CertFreeCertificateChain(pChainContext);
-						}
-
-						if (!pinned)
-						{
-                            // Report back to the client with the failed certs when cert-pinning has failed.
-                            p_request_context->m_request.invoke_rejected_certificate_chain_callback(certificatesInfo);
-							// client refused all the certificates, track the failure and cancel the request.
-							p_request_context->m_certificate_pinning_failed = true;
-							p_request_context->cleanup();
-							return;
-						}
-					}
-					else
-					{
-						// not able to extract the leaf certificate, ask the pinning callback what to do in this case by passing in null values
-						if (!p_request_context->m_http_client->client_config().invoke_pinning_callback(url, U("")))
-						{
-							// connection not allowed to continue with no certificates available, callback with the failure and cancel the request.
-                            p_request_context->m_request.invoke_rejected_certificate_chain_callback( {} );
-							p_request_context->m_certificate_pinning_failed = true;
-							p_request_context->cleanup();
-							return;
-						}
-					}
-
-					break;
-				}
+                                        std::vector<unsigned char> certData(cert->pbCertEncoded, cert->pbCertEncoded + (int)cert->cbCertEncoded);
+                                        cert_chain.emplace_back(certData);
+                                    }
+                                }
+                            }
+                        }
+                        CertFreeCertificateChain(pChainContext);
+                    }
+                    CertFreeCertificateContext(pCert);
+                }
+                if (!p_request_context->m_http_client->client_config().invoke_certificate_chain_callback(url, cert_chain))
+                {
+                    p_request_context->m_certificate_chain_verification_failed = true;
+                }
+                break;
+            }
             case WINHTTP_CALLBACK_STATUS_SENDREQUEST_COMPLETE :
                 {
                     if (!p_request_context->m_request.body())
@@ -1340,6 +1225,15 @@ private:
                         {
                             // The request was not completed but resent with credentials. Wait until we get a new response
                             return;
+                        }
+                    }
+                    else
+                    {
+                        // The connection is allowed, but did the client allow the connection.
+                        if (p_request_context->m_certificate_chain_verification_failed)
+                        {
+                            p_request_context->report_error(ERROR_WINHTTP_SECURE_FAILURE, build_error_msg(ERROR_WINHTTP_SECURE_FAILURE, "WinHttpVerificationFailed"));
+                            break;
                         }
                     }
 

@@ -892,40 +892,47 @@ private:
         // certificate, i.e. actual server certificate is at the '0' position in the
         // certificate chain, the rest are optional intermediate certificates, followed
         // finally by the root CA self signed certificate.
-        
+
         const auto &host = m_http_client->base_uri().host();
-        
+
         using namespace web::http::client::details;
 
-        auto pinningCallback = [this, host](const std::string& host, const std::string& key) {
-            return m_http_client->client_config().invoke_pinning_callback(host, key);
-        };
-
-        auto certPinned = is_certificate_pinned(host, verifyCtx, pinningCallback);
-
-        if (!certPinned)
-        {
-            return false;
-        }
-        
 #if defined(__APPLE__) || (defined(ANDROID) || defined(__ANDROID__))
         // On OS X, iOS, and Android, OpenSSL doesn't have access to where the OS
         // stores keychains. If OpenSSL fails we will doing verification at the
         // end using the whole certificate chain so wait until the 'leaf' cert.
         // For now return true so OpenSSL continues down the certificate chain.
-        if(!preverified)
+        if (!preverified)
         {
             m_openssl_failed = true;
         }
-        if(m_openssl_failed)
+        if (m_openssl_failed)
         {
-            return verify_cert_chain_platform_specific(verifyCtx, host);
+
+            if (!is_end_certificate_in_chain(verifyCtx))
+            {
+                // Continue until we get the end certificate.
+                return true;
+            }
+
+            if (!verify_cert_chain_platform_specific(verifyCtx, utility::conversions::to_utf8string(host)))
+            {
+                return false;
+            }
+            else
+            {
+                return m_http_client->client_config().invoke_certificate_chain_callback(host, get_X509_cert_chain_encoded_data(verifyCtx));
+            }
         }
 #endif
 
         boost::asio::ssl::rfc2818_verification rfc2818(host);
+        if(!rfc2818(preverified, verifyCtx))
+        {
+            return false;
+        }
 
-        return rfc2818(preverified, verifyCtx);
+        return m_http_client->client_config().invoke_certificate_chain_callback(host, get_X509_cert_chain_encoded_data(verifyCtx));
     }
 
     void handle_write_headers(const boost::system::error_code& ec)

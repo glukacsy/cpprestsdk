@@ -93,13 +93,12 @@ bool verify_X509_cert_chain(const std::vector<std::string> &certChain, const std
     }
     chain.reset(chainContext);
 
-    // Check to see if the certificate chain is actually trusted.
-    if (chain->TrustStatus.dwErrorStatus != CERT_TRUST_NO_ERROR)
+    // Check to see if the certificate chain is actually trusted, allow certs where it's revocation status is unknown.
+    if (chain->TrustStatus.dwErrorStatus == CERT_TRUST_NO_ERROR || chain->TrustStatus.dwErrorStatus == CERT_TRUST_REVOCATION_STATUS_UNKNOWN)
     {
-        return false;
+        return true;
     }
-
-    return true;
+    return false;
 }
 
 }}}}
