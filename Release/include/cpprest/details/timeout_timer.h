@@ -79,6 +79,12 @@ namespace utils
             m_state = stopped;
             m_timer.cancel();
         }
+        
+        bool isTimedout() const
+        {
+            ScopedLock l(m_mutex);
+            return m_state == timedout;
+        }
     
     protected:
         timeout_timer(boost::asio::io_service& service, const Duration& timeout, CommandHandler commandHandler) :
@@ -94,6 +100,7 @@ namespace utils
             created,
             started,
             stopped,
+            timedout
         };
         
         std::function<void (const boost::system::error_code&)> getHandler()
@@ -102,13 +109,14 @@ namespace utils
             std::weak_ptr<timeout_timer> weakThis = shared_from_this();
             return [handler, weakThis](const boost::system::error_code& ec)
             {
-                if (!ec)
+                auto lockedThis = weakThis.lock();
+                if (lockedThis)
                 {
-                    auto lockedThis = weakThis.lock();
-                    if (lockedThis)
+                    if (!ec)
                     {
                         handler(lockedThis.get());
                     }
+                    lockedThis->m_state = timedout;
                 }
             };
         }
