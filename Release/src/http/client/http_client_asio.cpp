@@ -88,12 +88,12 @@ static bool isSSLEnabled(std::shared_ptr<_http_client_communicator>& http_client
     
     
 class asio_connection_pool;
-class asio_connection_happy_eyeballs;
+class asio_connection_fast_ipv4_fallback;
 class asio_connection
 {
     friend class asio_connection_pool;
     friend class asio_client;
-    friend class asio_connection_happy_eyeballs;
+    friend class asio_connection_fast_ipv4_fallback;
 public:
     asio_connection(boost::asio::io_service& io_service, bool start_with_ssl, const std::function<void(boost::asio::ssl::context&)>& ssl_context_callback) :
     m_socket(io_service),
@@ -380,17 +380,17 @@ public:
     
 
     
-class asio_connection_happy_eyeballs : public std::enable_shared_from_this<asio_connection_happy_eyeballs>
+class asio_connection_fast_ipv4_fallback : public std::enable_shared_from_this<asio_connection_fast_ipv4_fallback>
 {
 public:
     using ConnectHandler = boost::function<void(const boost::system::error_code& ec, tcp::resolver::iterator endpoints)>;
         
-    asio_connection_happy_eyeballs(std::shared_ptr<_http_client_communicator> &client, const std::chrono::microseconds& timeout) :
+    asio_connection_fast_ipv4_fallback(std::shared_ptr<_http_client_communicator> &client, const std::chrono::microseconds& timeout) :
         m_client(client), m_requestsCount(0), m_timeout(timeout), m_state(ConnectionState::Idle), m_connection(nullptr)
     {
     }
     
-    ~asio_connection_happy_eyeballs()
+    ~asio_connection_fast_ipv4_fallback()
     {
         close();
     }
@@ -801,7 +801,7 @@ private:
             {
                 m_state = ConnectionState::Connecting;
                 m_pendingConnections.push_back(connection);
-                connection->async_connect(*endpoints, boost::bind(&asio_connection_happy_eyeballs::handle_tcp_connect, shared_from_this(), connection, id, boost::asio::placeholders::error, endpoints, handler));
+                connection->async_connect(*endpoints, boost::bind(&asio_connection_fast_ipv4_fallback::handle_tcp_connect, shared_from_this(), connection, id, boost::asio::placeholders::error, endpoints, handler));
             }
             break;
             case ConnectionState::ConnectedSuccess:
@@ -818,7 +818,7 @@ private:
         
     void scheduleConnect_unlocked(int id, std::shared_ptr<asio_connection>& connection, boost::asio::ip::tcp::resolver::iterator endpoints, ConnectHandler handler)
     {
-        auto connectFunc = boost::bind(&asio_connection_happy_eyeballs::connect, shared_from_this(), id, connection, endpoints, handler);
+        auto connectFunc = boost::bind(&asio_connection_fast_ipv4_fallback::connect, shared_from_this(), id, connection, endpoints, handler);
             
         m_he_timer = utils::timeout_timer::create(crossplat::threadpool::shared_instance().service(), m_timeout,
                                                       [connectFunc](utils::timeout_timer* timer)
@@ -878,7 +878,7 @@ class asio_context : public request_context, public std::enable_shared_from_this
 public:
     asio_context(const std::shared_ptr<_http_client_communicator> &client,
                  http_request &request,
-                 const std::shared_ptr<asio_connection_happy_eyeballs> &connection_he)
+                 const std::shared_ptr<asio_connection_fast_ipv4_fallback> &connection_he)
     : request_context(client, request)
     , m_content_length(0)
     , m_needChunked(false)
@@ -899,7 +899,7 @@ public:
     static std::shared_ptr<request_context> create_request_context(std::shared_ptr<_http_client_communicator> &client, http_request &request)
     {
         auto client_cast(std::static_pointer_cast<asio_client>(client));
-        auto connection_he = std::make_shared<asio_connection_happy_eyeballs>(client, fast_ipv4_fallback_delay);
+        auto connection_he = std::make_shared<asio_connection_fast_ipv4_fallback>(client, fast_ipv4_fallback_delay);
         auto ctx = std::make_shared<asio_context>(client, request, connection_he);
         ctx->m_timer.set_ctx(std::weak_ptr<asio_context>(ctx));
         return ctx;
@@ -2110,7 +2110,7 @@ private:
     bool m_needChunked;
     timeout_timer m_timer;
     boost::asio::streambuf m_body_buf;
-    std::shared_ptr<asio_connection_happy_eyeballs> m_connection;
+    std::shared_ptr<asio_connection_fast_ipv4_fallback> m_connection;
     
     std::unique_ptr<web::http::details::compression::stream_decompressor> m_decompressor;
 

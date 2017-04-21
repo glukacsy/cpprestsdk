@@ -21,6 +21,8 @@
  * =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
  ****/
 
+#ifndef _WIN32
+
 #include "stdafx.h"
 #include "cpprest/details/fast_ipv4_fallback.h"
 
@@ -323,3 +325,5 @@ namespace tests { namespace functional { namespace http { namespace client {
 }
 }
 }
+
+#endif
