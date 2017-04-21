@@ -133,7 +133,7 @@ TEST_FIXTURE(uri_address, cert_pinning_succeed)
     VERIFY_ARE_EQUAL(status_codes::OK, response.status_code());
 }
 
-#ifndef _WIN32
+#ifdef _WIN32
 TEST_FIXTURE(uri_address, cert_pinning_failed)
 {
     test_http_server::scoped_server scoped(m_uri);
