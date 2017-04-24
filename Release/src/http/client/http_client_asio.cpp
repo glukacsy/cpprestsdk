@@ -36,6 +36,7 @@
 #include <boost/asio/ssl.hpp>
 #include <boost/asio/steady_timer.hpp>
 #include <boost/algorithm/string.hpp>
+#include <boost/bind/placeholders.hpp>
 #if defined(__clang__)
 #pragma clang diagnostic pop
 #endif
