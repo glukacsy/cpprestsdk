@@ -37,6 +37,7 @@
 #include <boost/asio/steady_timer.hpp>
 #include <boost/algorithm/string.hpp>
 #include <boost/bind/placeholders.hpp>
+#include <boost/bind.hpp>
 #if defined(__clang__)
 #pragma clang diagnostic pop
 #endif
