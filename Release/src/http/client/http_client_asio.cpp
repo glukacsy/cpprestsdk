@@ -36,8 +36,6 @@
 #include <boost/asio/ssl.hpp>
 #include <boost/asio/steady_timer.hpp>
 #include <boost/algorithm/string.hpp>
-#include <boost/bind/placeholders.hpp>
-#include <boost/bind.hpp>
 #if defined(__clang__)
 #pragma clang diagnostic pop
 #endif
@@ -962,7 +960,7 @@ public:
         void connect(tcp::resolver::iterator endpoints)
         {
             try {
-                m_context->m_connection->connect(endpoints, boost::bind(&ssl_proxy_tunnel::handle_tcp_connect, shared_from_this(), boost::placeholders::_1, boost::placeholders::_2));
+                m_context->m_connection->connect(endpoints, boost::bind(&ssl_proxy_tunnel::handle_tcp_connect, shared_from_this(), boost::asio::placeholders::error, boost::asio::placeholders::iterator));
             }
             catch(...)
             {
@@ -1364,7 +1362,7 @@ private:
     void connect(tcp::resolver::iterator endpoints)
     {
         try {
-            m_connection->connect(endpoints, boost::bind(&asio_context::handle_connect, shared_from_this(), boost::placeholders::_1, boost::placeholders::_2));
+            m_connection->connect(endpoints, boost::bind(&asio_context::handle_connect, shared_from_this(), boost::asio::placeholders::error , boost::asio::placeholders::iterator));
         }
         catch(...)
         {

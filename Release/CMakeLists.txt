@@ -74,9 +74,6 @@ elseif(ANDROID)
   option(BUILD_TESTS "Build tests." ON)
 elseif(UNIX) # This includes OSX
   set(Boost_USE_STATIC_LIBS ON)
-  if(CMAKE_COMPILER_IS_GNUCXX)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
-  endif()
   find_package(Boost REQUIRED COMPONENTS random chrono system thread regex filesystem)
 
   find_package(Threads REQUIRED)
