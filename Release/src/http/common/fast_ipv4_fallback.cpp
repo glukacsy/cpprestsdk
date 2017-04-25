@@ -1,6 +1,7 @@
+#include "stdafx.h"
+
 #ifndef _WIN32
 
-#include "stdafx.h"
 #include <cpprest/details/fast_ipv4_fallback.h>
 
 #include <iterator>
