@@ -1,6 +1,10 @@
+#ifndef _WIN32
+
+#include "stdafx.h"
 #include <cpprest/details/fast_ipv4_fallback.h>
 
 #include <iterator>
+
 
 
 using Iterator = boost::asio::ip::tcp::resolver::iterator;
@@ -142,5 +146,4 @@ std::function<void (utils::timeout_timer *timer)> AddressCache::createCallback()
 }
 }
 
-
-
+#endif
