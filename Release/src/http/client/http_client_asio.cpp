@@ -912,7 +912,7 @@ public:
     {
         auto client_cast(std::static_pointer_cast<asio_client>(client));
         auto connection = client_cast->m_pool.obtain(asio_connection_pool::Type::reused_connection);
-        auto connection_he = std::make_shared<asio_connection_fast_ipv4_fallback>(client, fast_ipv4_fallback_delay);
+        auto connection_he = std::make_shared<asio_connection_fast_ipv4_fallback>(client, fast_ipv4_fallback_delay, connection);
         auto ctx = std::make_shared<asio_context>(client, request, connection_he);
         ctx->m_timer.set_ctx(std::weak_ptr<asio_context>(ctx));
         return ctx;
