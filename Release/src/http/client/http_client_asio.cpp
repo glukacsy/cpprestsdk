@@ -385,14 +385,17 @@ class asio_connection_fast_ipv4_fallback : public std::enable_shared_from_this<a
 public:
     using ConnectHandler = boost::function<void(const boost::system::error_code& ec, tcp::resolver::iterator endpoints)>;
         
-    asio_connection_fast_ipv4_fallback(std::shared_ptr<_http_client_communicator> &client, const std::chrono::microseconds& timeout) :
-        m_client(client), m_requestsCount(0), m_timeout(timeout), m_state(ConnectionState::Idle), m_connection(nullptr)
+    asio_connection_fast_ipv4_fallback(std::shared_ptr<_http_client_communicator> &client, const std::chrono::microseconds& timeout, std::shared_ptr<asio_connection> connection = nullptr) :
+        m_client(client), m_requestsCount(0), m_timeout(timeout), m_state(ConnectionState::Idle), m_connection(connection)
     {
+        if (m_connection)
+        {
+            m_state = ConnectionState::ConnectedSuccess;
+        }
     }
     
     ~asio_connection_fast_ipv4_fallback()
     {
-        close();
     }
     
     void connect(tcp::resolver::iterator endpoints, ConnectHandler handler)
@@ -908,6 +911,7 @@ public:
     static std::shared_ptr<request_context> create_request_context(std::shared_ptr<_http_client_communicator> &client, http_request &request)
     {
         auto client_cast(std::static_pointer_cast<asio_client>(client));
+        auto connection = client_cast->m_pool.obtain(asio_connection_pool::Type::reused_connection);
         auto connection_he = std::make_shared<asio_connection_fast_ipv4_fallback>(client, fast_ipv4_fallback_delay);
         auto ctx = std::make_shared<asio_context>(client, request, connection_he);
         ctx->m_timer.set_ctx(std::weak_ptr<asio_context>(ctx));
