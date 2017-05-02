@@ -1592,7 +1592,7 @@ private:
                 const auto actualReadSize = op.get();
                 if(actualReadSize == 0)
                 {
-                    this_request->report_exception(http_exception("Unexpected end of request body stream encountered before Content-Length satisfied."));
+                    this_request->report_exception(http_exception("Unexpected end of request body stream encountered before Content-Length satisfied." ));
                     return;
                 }
                 this_request->m_uploaded += static_cast<uint64_t>(actualReadSize);
