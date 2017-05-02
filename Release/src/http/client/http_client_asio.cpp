@@ -913,8 +913,6 @@ public:
         auto client_cast(std::static_pointer_cast<asio_client>(client));
         auto connection = client_cast->m_pool.obtain(asio_connection_pool::Type::reused_connection);
         auto connection_he = std::make_shared<asio_connection_fast_ipv4_fallback>(client, fast_ipv4_fallback_delay, connection);
-        
-        auto s = request.body().streambuf().seekpos(0, std::ios::in);
         auto ctx = std::make_shared<asio_context>(client, request, connection_he);
         ctx->m_timer.set_ctx(std::weak_ptr<asio_context>(ctx));
         return ctx;
@@ -1675,7 +1673,7 @@ private:
                 // Failed to write to socket because connection was already closed while it was in the pool.
                 // close() here ensures socket is closed in a robust way and prevents the connection from being put to the pool again.
                 m_connection->close();
-
+                m_request.body().streambuf().seekpos(0, std::ios::in);
                 // Create a new context and copy the request object, completion event and
                 // cancellation registration to maintain the old state.
                 // This also obtains a new connection from pool.
