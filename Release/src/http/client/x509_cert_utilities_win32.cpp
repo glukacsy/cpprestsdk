@@ -52,11 +52,9 @@ typedef std::unique_ptr<const CERT_CHAIN_CONTEXT, cert_free_certificate_chain> c
 
 bool verify_X509_cert_chain(const std::vector<std::string> &certChain, const std::string &)
 {
+
     // Create certificate context from server certificate.
-    cert_context cert(CertCreateCertificateContext(
-        X509_ASN_ENCODING | PKCS_7_ASN_ENCODING,
-        reinterpret_cast<const unsigned char *>(certChain[0].c_str()),
-        static_cast<DWORD>(certChain[0].size())));
+    cert_context cert(CertCreateCertificateContext(X509_ASN_ENCODING | PKCS_7_ASN_ENCODING, reinterpret_cast<const unsigned char *>(certChain[0].c_str()), static_cast<DWORD>(certChain[0].size())));
     if (cert == nullptr)
     {
         return false;
@@ -67,34 +65,61 @@ bool verify_X509_cert_chain(const std::vector<std::string> &certChain, const std
     ZeroMemory(&params, sizeof(params));
     params.cbSize = sizeof(CERT_CHAIN_PARA);
     params.RequestedUsage.dwType = USAGE_MATCH_TYPE_OR;
-    LPSTR usages [] =
+    LPSTR usages[] =
     {
         szOID_PKIX_KP_SERVER_AUTH,
-        
+
         // For older servers and to match IE.
         szOID_SERVER_GATED_CRYPTO,
         szOID_SGC_NETSCAPE
     };
     params.RequestedUsage.Usage.cUsageIdentifier = std::extent<decltype(usages)>::value;
     params.RequestedUsage.Usage.rgpszUsageIdentifier = usages;
+
+    // Add all SSL certs into a store, to be used when building the cert chain.
+    HCERTSTORE caMemStore = NULL;
+    caMemStore = CertOpenStore(CERT_STORE_PROV_MEMORY, (PKCS_7_ASN_ENCODING | X509_ASN_ENCODING), NULL, 0, NULL);
+    if (caMemStore)
+    {
+        for (const auto& certData : certChain)
+        {
+            PCCERT_CONTEXT certContext = CertCreateCertificateContext(X509_ASN_ENCODING | PKCS_7_ASN_ENCODING, reinterpret_cast<const unsigned char *>(certData.c_str()), static_cast<DWORD>(certData.size()));
+            if (certContext)
+            {
+                CertAddCertificateContextToStore(caMemStore, certContext, CERT_STORE_ADD_ALWAYS, NULL);
+                CertFreeCertificateContext(certContext);
+            }
+        }
+    }
+
     PCCERT_CHAIN_CONTEXT chainContext;
     chain_context chain;
-    if (!CertGetCertificateChain(
+    auto cSuccess = CertGetCertificateChain(
         nullptr,
         cert.get(),
         nullptr,
-        nullptr,
+        caMemStore,
         &params,
         CERT_CHAIN_REVOCATION_CHECK_CHAIN,
         nullptr,
-        &chainContext))
+        &chainContext);
+
+    if (caMemStore)
+    {
+        CertCloseStore(caMemStore, 0);
+    }
+
+    if (!cSuccess)
     {
         return false;
     }
+
     chain.reset(chainContext);
 
-    // Check to see if the certificate chain is actually trusted, allow certs where it's revocation status is unknown.
-    if (chain->TrustStatus.dwErrorStatus == CERT_TRUST_NO_ERROR || chain->TrustStatus.dwErrorStatus == CERT_TRUST_REVOCATION_STATUS_UNKNOWN)
+    // Only do revocation checking if it's known.
+    if (chain->TrustStatus.dwErrorStatus == CERT_TRUST_NO_ERROR ||
+        chain->TrustStatus.dwErrorStatus == CERT_TRUST_REVOCATION_STATUS_UNKNOWN ||
+        chain->TrustStatus.dwErrorStatus == (CERT_TRUST_IS_OFFLINE_REVOCATION | CERT_TRUST_REVOCATION_STATUS_UNKNOWN))
     {
         return true;
     }
