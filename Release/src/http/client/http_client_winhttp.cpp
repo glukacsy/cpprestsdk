@@ -1116,6 +1116,7 @@ private:
 
                     if (validChain && pChainContext)
                     {
+                        // Only do revocation checking if it's known.
                         if (pChainContext->TrustStatus.dwErrorStatus == CERT_TRUST_NO_ERROR ||
                             pChainContext->TrustStatus.dwErrorStatus == CERT_TRUST_REVOCATION_STATUS_UNKNOWN ||
                             pChainContext->TrustStatus.dwErrorStatus == (CERT_TRUST_IS_OFFLINE_REVOCATION | CERT_TRUST_REVOCATION_STATUS_UNKNOWN))

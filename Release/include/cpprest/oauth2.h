@@ -54,6 +54,8 @@ public:
 namespace experimental
 {
 
+using CertificateChainCallBackFunction = std::function<bool(const utility::string_t&, const std::vector<std::vector<unsigned char>>&)>;
+
 /// <summary>
 /// Exception type for OAuth 2.0 errors.
 /// </summary>
@@ -467,6 +469,17 @@ public:
     /// </summary>
     void set_user_agent(utility::string_t user_agent) { m_user_agent = std::move(user_agent); }
 
+    /// <summary>
+    /// Set the certificate chain callback to be used by the http client.
+    /// </summary>
+    void set_user_certificate_chain_callback(const CertificateChainCallBackFunction& callback) { m_certificate_chain_callback = callback; }
+
+    /// <summary>
+    /// Get the cert chain callback.
+    /// </summary>
+    /// <returns>A reference to cert chain callback user by the client.</returns>
+    const CertificateChainCallBackFunction& user_certificate_chain_callback() { return m_certificate_chain_callback; }
+
 private:
     friend class web::http::client::http_client_config;
     friend class web::http::oauth2::details::oauth2_handler;
@@ -514,6 +527,8 @@ private:
     utility::nonce_generator m_state_generator;
     // Warning  - this field caused a crash on mac when it was in the middle of the structure instead of at the end
 	web::web_proxy m_proxy;
+
+    CertificateChainCallBackFunction m_certificate_chain_callback;
 };
 
 } // namespace web::http::oauth2::experimental
