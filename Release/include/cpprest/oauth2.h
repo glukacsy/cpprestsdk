@@ -218,7 +218,8 @@ public:
                 m_implicit_grant(false),
                 m_bearer_auth(true),
                 m_http_basic_auth(true),
-                m_access_token_key(details::oauth2_strings::access_token)
+                m_access_token_key(details::oauth2_strings::access_token),
+                m_certificate_chain_callback([](const utility::string_t&, const std::vector<std::vector<unsigned char>>&)->bool { return true; })
     {}
 
     /// <summary>
