@@ -1657,7 +1657,7 @@ private:
                 const auto actualReadSize = op.get();
                 if(actualReadSize == 0)
                 {
-                    this_request->report_exception(http_exception("Unexpected end of request body stream encountered before Content-Length satisfied."));
+                    this_request->report_exception(http_exception("Unexpected end of request body stream encountered before Content-Length satisfied." ));
                     return;
                 }
                 this_request->m_uploaded += static_cast<uint64_t>(actualReadSize);
@@ -1740,7 +1740,7 @@ private:
                 // Failed to write to socket because connection was already closed while it was in the pool.
                 // close() here ensures socket is closed in a robust way and prevents the connection from being put to the pool again.
                 m_connection->close();
-
+                m_request.body().streambuf().seekpos(0, std::ios::in);
                 // Create a new context and copy the request object, completion event and
                 // cancellation registration to maintain the old state.
                 // This also obtains a new connection from pool.
