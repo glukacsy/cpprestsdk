@@ -38,10 +38,6 @@ namespace http
 using web::uri;
 using web::uri_builder;
 
-using cert_chain_info = std::vector<std::tuple<utility::string_t, utility::string_t, utility::string_t>>;
-using rejected_certificate_callback_function = std::function<void(const cert_chain_info)>;
-
-
 namespace client
 {
     class http_client;
@@ -759,16 +755,6 @@ public:
 
     void _set_base_uri(const http::uri &base_uri) { m_base_uri = base_uri; }
     
-    void set_rejected_certificate_chain_callback(const rejected_certificate_callback_function& callback) { m_rejected_certificate_chain_callback = callback; }
-    
-    void call_rejected_certificate_chain_callback(const cert_chain_info& certificatesInfo)
-    {
-        if (m_rejected_certificate_chain_callback)
-        {
-            m_rejected_certificate_chain_callback(certificatesInfo);
-        }
-    }
-
 private:
 
     // Actual initiates sending the response, without checking if a response has already been sent.
@@ -792,8 +778,6 @@ private:
     std::shared_ptr<progress_handler> m_progress_handler;
 
     pplx::task_completion_event<http_response> m_response;
-    
-    rejected_certificate_callback_function m_rejected_certificate_chain_callback;
 };
 
 
@@ -1311,16 +1295,6 @@ public:
     void _set_base_uri(const http::uri &base_uri)
     {
         _m_impl->_set_base_uri(base_uri);
-    }
-
-    void invoke_rejected_certificate_chain_callback(const cert_chain_info& certificatesInfo)
-    {
-        _m_impl->call_rejected_certificate_chain_callback(certificatesInfo);
-    }
-
-    void set_user_rejected_certificate_chain_callback(const rejected_certificate_callback_function& callback)
-    {
-        _m_impl->set_rejected_certificate_chain_callback(callback);
     }
 
 private:
