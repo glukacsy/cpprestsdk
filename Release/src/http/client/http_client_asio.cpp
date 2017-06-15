@@ -49,13 +49,16 @@
 #include "cpprest/details/http_helpers.h"
 #include "cpprest/details/fast_ipv4_fallback.h"
 #include "cpprest/details/timeout_timer.h"
+#include "cpprest/certificate_info.h"
 #include <unordered_set>
 #include <memory>
 #include <atomic>
 
 using boost::asio::ip::tcp;
 
-namespace web { namespace http
+namespace web
+{ 
+namespace http
 {
 namespace client
 {
@@ -1453,20 +1456,17 @@ private:
         if (m_openssl_failed)
         {
 
-            if (!is_end_certificate_in_chain(verifyCtx))
+            if (!http::client::details::is_end_certificate_in_chain(verifyCtx))
             {
                 // Continue until we get the end certificate.
                 return true;
             }
 
-            if (!verify_cert_chain_platform_specific(verifyCtx, utility::conversions::to_utf8string(host)))
-            {
-                return false;
-            }
-            else
-            {
-                return m_http_client->client_config().invoke_certificate_chain_callback(host, get_X509_cert_chain_encoded_data(verifyCtx));
-            }
+            auto chainFunc = [this](const std::shared_ptr<certificate_info>& cert_info) {
+                return m_http_client->client_config().invoke_certificate_chain_callback(cert_info);
+            };
+
+            return http::client::details::verify_cert_chain_platform_specific(verifyCtx, utility::conversions::to_utf8string(host), chainFunc);
         }
 #endif
 
@@ -1476,7 +1476,7 @@ private:
             return false;
         }
 
-        return m_http_client->client_config().invoke_certificate_chain_callback(host, get_X509_cert_chain_encoded_data(verifyCtx));
+        return m_http_client->client_config().invoke_certificate_chain_callback(std::make_shared<certificate_info>(host, get_X509_cert_chain_encoded_data(verifyCtx)));
     }
 
     void handle_write_headers(const boost::system::error_code& ec)

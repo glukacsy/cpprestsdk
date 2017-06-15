@@ -46,7 +46,7 @@ bool is_end_certificate_in_chain(boost::asio::ssl::verify_context &verifyCtx)
     return true;
 }
 
-bool verify_cert_chain_platform_specific(boost::asio::ssl::verify_context &verifyCtx, const std::string &hostName)
+bool verify_cert_chain_platform_specific(boost::asio::ssl::verify_context &verifyCtx, const std::string &hostName, const CertificateChainFunction& func)
 {
     if (!is_end_certificate_in_chain(verifyCtx))
     {
@@ -86,17 +86,17 @@ bool verify_cert_chain_platform_specific(boost::asio::ssl::verify_context &verif
         certChain.push_back(std::move(certData));
     }
 
-    auto verify_result = verify_X509_cert_chain(certChain, hostName);
+    auto verified = verify_X509_cert_chain(certChain, hostName, func);
 
     // The Windows Crypto APIs don't do host name checks, use Boost's implementation.
 #if defined(_WIN32)
-    if (verify_result)
+    if (verified)
     {
         boost::asio::ssl::rfc2818_verification rfc2818(hostName);
-        verify_result = rfc2818(verify_result, verifyCtx);
+        verified = rfc2818(verified, verifyCtx);
     }
 #endif
-    return verify_result;
+    return verified;
 }
 
 #endif
