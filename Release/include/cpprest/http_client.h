@@ -47,6 +47,7 @@ typedef void* native_handle;}}}
 #include "cpprest/http_msg.h"
 #include "cpprest/json.h"
 #include "cpprest/uri.h"
+#include "cpprest/certificate_info.h"
 #include "cpprest/details/web_utilities.h"
 #include "cpprest/details/basic_types.h"
 #include "cpprest/asyncrt_utils.h"
@@ -87,8 +88,6 @@ namespace client
 using web::credentials;
 using web::web_proxy;
 
-using CertificateChainCallBackFunction = std::function<bool(const utility::string_t&, const std::vector<std::vector<unsigned char>>&)>;
-
 /// <summary>
 /// HTTP client configuration class, used to set the possible configuration options
 /// used to create an http_client instance.
@@ -105,8 +104,8 @@ public:
 #if !defined(__cplusplus_winrt)
         , m_validate_certificates(true)
 #endif
-        , m_certificate_chain_callback([](const utility::string_t&, const std::vector<std::vector<unsigned char>>&)->bool { return true; })  // by default certificate chain callback returns success.
-		, m_set_user_nativehandle_options([](native_handle)->void {})
+        , m_certificate_chain_callback([](const std::shared_ptr<certificate_info>&)->bool { return true; })
+        , m_set_user_nativehandle_options([](native_handle)->void {})
 #if !defined(_WIN32) && !defined(__cplusplus_winrt)
         , m_ssl_context_callback([](boost::asio::ssl::context&)->void{})
         , m_tlsext_sni_enabled(true)
@@ -384,7 +383,7 @@ public:
     /// <summary>
     /// Set the certificate chain callback. If set, HTTP client will call this callback in a blocking manner during HTTP connection.
     /// </summary>
-    void set_user_certificate_chain_callback(const CertificateChainCallBackFunction& callback)
+    void set_user_certificate_chain_callback(const CertificateChainFunction& callback)
     {
         m_certificate_chain_callback = callback;
     }
@@ -392,12 +391,11 @@ public:
     /// <summary>
     /// Invokes the certificate chain callback.
     /// </summary>
-    /// <param name="url">The URL in the actual TLS session which might be different than the original URL due to redirection.</param>
-    /// <param name="certificate">The cert_chain is the encoded data of the certificate chain, used by the client for validation purposes however it wants.</param>
+    /// <param name="certificate_info">Pointer to the certificate_info struct that has the certificate information.</param>
     /// <returns>True if the consumer code allows the connection, false otherwise. False will terminate the HTTP connection.</returns>
-    bool invoke_certificate_chain_callback(const utility::string_t& url, const std::vector<std::vector<unsigned char>>& cert_chain) const
+    bool invoke_certificate_chain_callback(const std::shared_ptr<certificate_info>& certificate_Info) const
     {
-        return m_certificate_chain_callback(url, cert_chain);
+        return m_certificate_chain_callback(certificate_Info);
     }
 
 #if !defined(_WIN32) && !defined(__cplusplus_winrt)
@@ -459,7 +457,7 @@ private:
     bool m_validate_certificates;
 #endif
 
-    CertificateChainCallBackFunction m_certificate_chain_callback;
+    CertificateChainFunction m_certificate_chain_callback;
     std::function<void(native_handle)> m_set_user_nativehandle_options;
 
 #if !defined(_WIN32) && !defined(__cplusplus_winrt)

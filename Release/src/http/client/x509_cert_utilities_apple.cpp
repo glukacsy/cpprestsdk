@@ -65,32 +65,32 @@ private:
     T value;
 };
 
-bool verify_X509_cert_chain(const std::vector<std::string> &certChain, const std::string &hostName)
+bool verify_X509_cert_chain(const std::vector<std::string> &certChain, const std::string &hostName, const CertificateChainFunction& certInfoFunc /* = nullptr */)
 {
     // Build up CFArrayRef with all the certificates.
     // All this code is basically just to get into the correct structures for the Apple APIs.
     // Copies are avoided whenever possible.
     std::vector<cf_ref<SecCertificateRef>> certs;
-    for(const auto & certBuf : certChain)
+    for (const auto & certBuf : certChain)
     {
         cf_ref<CFDataRef> certDataRef = CFDataCreateWithBytesNoCopy(kCFAllocatorDefault,
-                                                                   reinterpret_cast<const unsigned char*>(certBuf.c_str()),
-                                                                   certBuf.size(),
-                                                                   kCFAllocatorNull);
-        if(certDataRef.get() == nullptr)
+            reinterpret_cast<const unsigned char*>(certBuf.c_str()),
+            certBuf.size(),
+            kCFAllocatorNull);
+        if (certDataRef.get() == nullptr)
         {
             return false;
         }
 
         cf_ref<SecCertificateRef> certObj = SecCertificateCreateWithData(nullptr, certDataRef.get());
-        if(certObj.get() == nullptr)
+        if (certObj.get() == nullptr)
         {
             return false;
         }
         certs.push_back(std::move(certObj));
     }
     cf_ref<CFArrayRef> certsArray = CFArrayCreate(kCFAllocatorDefault, const_cast<const void **>(reinterpret_cast<void **>(&certs[0])), certs.size(), nullptr);
-    if(certsArray.get() == nullptr)
+    if (certsArray.get() == nullptr)
     {
         return false;
     }
@@ -99,28 +99,58 @@ bool verify_X509_cert_chain(const std::vector<std::string> &certChain, const std
     // Note: SecTrustCreateWithCertificates expects the certificate to be
     // verified is the first element.
     cf_ref<CFStringRef> cfHostName = CFStringCreateWithCStringNoCopy(kCFAllocatorDefault,
-                                                                    hostName.c_str(),
-                                                                    kCFStringEncodingASCII,
-                                                                    kCFAllocatorNull);
-    if(cfHostName.get() == nullptr)
+        hostName.c_str(),
+        kCFStringEncodingASCII,
+        kCFAllocatorNull);
+    if (cfHostName.get() == nullptr)
     {
         return false;
     }
+
     cf_ref<SecPolicyRef> policy = SecPolicyCreateSSL(true /* client side */, cfHostName.get());
     cf_ref<SecTrustRef> trust;
     OSStatus status = SecTrustCreateWithCertificates(certsArray.get(), policy.get(), &trust.get());
-    if(status == noErr)
+
+    bool isVerified = false;
+    if (status == noErr)
     {
         // Perform actual certificate verification.
         SecTrustResultType trustResult;
         status = SecTrustEvaluate(trust.get(), &trustResult);
-        if(status == noErr && (trustResult == kSecTrustResultUnspecified || trustResult == kSecTrustResultProceed))
+        if (status == noErr && (trustResult == kSecTrustResultUnspecified || trustResult == kSecTrustResultProceed))
         {
-            return true;
+            isVerified = true;
+        }
+
+        if (certInfoFunc)
+        {
+            auto info = std::make_shared<certificate_info>(hostName);
+            info->certificate_error = (long)trustResult;
+            info->verified = isVerified;
+
+            CFIndex cnt = SecTrustGetCertificateCount(trust.get());
+            if(cnt > 0)
+            {
+                std::vector<std::vector<unsigned char>> full_cert_chain;
+                full_cert_chain.reserve(cnt);
+                for (int i = 0; i < cnt; i++)
+                {
+                    SecCertificateRef cert = SecTrustGetCertificateAtIndex(trust.get(), i);
+                    cf_ref<CFDataRef> cdata = SecCertificateCopyData(cert);
+
+                    const unsigned char * buffer = CFDataGetBytePtr(cdata.get());
+                    full_cert_chain.emplace_back(std::vector<unsigned char>(buffer, buffer + CFDataGetLength(cdata.get())));
+                }
+                info->certificate_chain = full_cert_chain;
+            }
+
+            if (!certInfoFunc(info))
+            {
+                isVerified = false;
+            }
         }
     }
-
-    return false;
+    return isVerified;
 }
 
 }}}}

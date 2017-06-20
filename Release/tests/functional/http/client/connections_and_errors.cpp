@@ -116,7 +116,7 @@ TEST_FIXTURE(uri_address, cert_pinning_succeed)
     client_config.set_credentials(cred);
     pplx::cancellation_token_source source;
 
-    client_config.set_user_certificate_chain_callback([](const utility::string_t&, const std::vector<std::vector<unsigned char>>&)->bool
+    client_config.set_user_certificate_chain_callback([](const std::shared_ptr<certificate_info>&)->bool
     {
         // accept any certificate.
         return true;
@@ -146,7 +146,7 @@ TEST_FIXTURE(uri_address, cert_pinning_failed)
     client_config.set_credentials(cred);
     pplx::cancellation_token_source source;
 
-    client_config.set_user_certificate_chain_callback([](const utility::string_t&, const std::vector<std::vector<unsigned char>>&)->bool
+    client_config.set_user_certificate_chain_callback([](const std::shared_ptr<certificate_info>&)->bool
     {
         // don't accept any certificate.
         return false;
