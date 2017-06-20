@@ -126,24 +126,22 @@ bool verify_X509_cert_chain(const std::vector<std::string> &certChain, const std
         if (certInfoFunc)
         {
             auto info = std::make_shared<certificate_info>(hostName);
-            info->certificate_error = (long)status;
+            info->certificate_error = (long)trustResult;
             info->verified = isVerified;
 
             // Get the full certificate chain.
-            CFArrayRef certificates = NULL;
-            auto sStatus = SecTrustCopyCustomAnchorCertificates(trust.get(), &certificates);
-            if (sStatus == noErr)
+            CFIndex cnt = SecTrustGetCertificateCount(trust.get());
+            if(cnt > 0)
             {
-                CFIndex cnt = CFArrayGetCount(certificates);
-
-                std::vector<std::vector<unsigned char>> full_cert_chain(cnt);
+                std::vector<std::vector<unsigned char>> full_cert_chain;
+                full_cert_chain.reserve(cnt);
                 for (int i = 0; i < cnt; i++)
                 {
                     SecCertificateRef cert = SecTrustGetCertificateAtIndex(trust.get(), i);
-                    CFDataRef cdata = SecCertificateCopyData(cert);
+                    cf_ref<CFDataRef> cdata = SecCertificateCopyData(cert);
 
-                    const unsigned char * buffer = CFDataGetBytePtr(cdata);
-                    full_cert_chain.emplace_back(std::vector<unsigned char>(buffer, buffer + CFDataGetLength(cdata)));
+                    const unsigned char * buffer = CFDataGetBytePtr(cdata.get());
+                    full_cert_chain.emplace_back(std::vector<unsigned char>(buffer, buffer + CFDataGetLength(cdata.get())));
                 }
                 info->certificate_chain = full_cert_chain;
             }
