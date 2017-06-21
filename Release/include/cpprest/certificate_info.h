@@ -30,17 +30,19 @@
 
 namespace web { namespace http { namespace client {
 
-struct certificate_info
-{
-    std::vector<std::vector<unsigned char>> certificate_chain;
-    std::string host_name;
-    long certificate_error{ 0 };
-    bool verified{ false };
+    using CertificateChain = std::vector<std::vector<unsigned char>>;
 
-    certificate_info(const std::string host) : host_name(host) {};
-    certificate_info(const std::string host, std::vector<std::vector<unsigned char>> chain, long error = 0) : host_name(host), certificate_chain(chain), certificate_error(error){};
-};
+    struct certificate_info
+    {
+        CertificateChain certificate_chain;
+        std::string host_name;
+        long certificate_error{ 0 };
+        bool verified{ false };
 
-using CertificateChainFunction = std::function<bool(const std::shared_ptr<certificate_info> certificate_Info)>;
+        certificate_info(const std::string host) : host_name(host) {};
+        certificate_info(const std::string host, CertificateChain chain, long error = 0) : host_name(host), certificate_chain(chain), certificate_error(error) {};
+    };
+
+    using CertificateChainFunction = std::function<bool(const std::shared_ptr<certificate_info> certificate_Info)>;
 
 }}}

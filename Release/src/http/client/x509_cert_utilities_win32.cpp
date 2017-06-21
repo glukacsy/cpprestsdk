@@ -50,6 +50,31 @@ struct cert_free_certificate_chain
 };
 typedef std::unique_ptr<const CERT_CHAIN_CONTEXT, cert_free_certificate_chain> chain_context;
 
+static std::shared_ptr<certificate_info> build_certificate_info_ptr(const chain_context& chain, const std::string& hostName, bool isVerified)
+{
+    auto info = std::make_shared<certificate_info>(hostName);
+
+    info->verified = isVerified;
+    info->certificate_error = chain->TrustStatus.dwErrorStatus;
+    info->certificate_chain.reserve((int)chain->cChain);
+
+    for (size_t i = 0; i < chain->cChain; ++i)
+    {
+        auto pChain = chain->rgpChain[i];
+        for (size_t j = 0; j < pChain->cElement; ++j)
+        {
+            auto chainElement = pChain->rgpElement[j];
+            auto cert = chainElement->pCertContext;
+            if (cert)
+            {
+                info->certificate_chain.emplace_back(std::vector<unsigned char>(cert->pbCertEncoded, cert->pbCertEncoded + (int)cert->cbCertEncoded));
+            }
+        }
+    }
+
+    return info;
+}
+
 bool verify_X509_cert_chain(const std::vector<std::string> &certChain, const std::string &hostName, const CertificateChainFunction& certInfoFunc /* = nullptr */)
 {
     // Create certificate context from server certificate.
@@ -66,11 +91,10 @@ bool verify_X509_cert_chain(const std::vector<std::string> &certChain, const std
     {
         for (const auto& certData : certChain)
         {
-            PCCERT_CONTEXT certContext = CertCreateCertificateContext(X509_ASN_ENCODING | PKCS_7_ASN_ENCODING, reinterpret_cast<const unsigned char *>(certData.c_str()), static_cast<DWORD>(certData.size()));
+            cert_context certContext(CertCreateCertificateContext(X509_ASN_ENCODING | PKCS_7_ASN_ENCODING, reinterpret_cast<const unsigned char *>(certData.c_str()), static_cast<DWORD>(certData.size())));
             if (certContext)
             {
-                CertAddCertificateContextToStore(caMemStore, certContext, CERT_STORE_ADD_ALWAYS, NULL);
-                CertFreeCertificateContext(certContext);
+                CertAddCertificateContextToStore(caMemStore, certContext.get(), CERT_STORE_ADD_ALWAYS, NULL);
             }
         }
     }
@@ -125,24 +149,7 @@ bool verify_X509_cert_chain(const std::vector<std::string> &certChain, const std
 
         if (certInfoFunc)
         {
-            auto info = std::make_shared<certificate_info>(hostName);
-            info->certificate_error = chain->TrustStatus.dwErrorStatus;
-            info->verified = isVerified;
-
-            info->certificate_chain.reserve((int)chain->cChain);
-            for (size_t i = 0; i < chain->cChain; ++i)
-            {
-                auto pChain = chain->rgpChain[i];
-                for (size_t j = 0; j < pChain->cElement; ++j)
-                {
-                    auto chainElement = pChain->rgpElement[j];
-                    auto cert = chainElement->pCertContext;
-                    if (cert)
-                    {
-                        info->certificate_chain.emplace_back(std::vector<unsigned char>(cert->pbCertEncoded, cert->pbCertEncoded + (int)cert->cbCertEncoded));
-                    }
-                }
-            }
+            auto info = build_certificate_info_ptr(chain, hostName, isVerified);
 
             if (!certInfoFunc(info))
             {
