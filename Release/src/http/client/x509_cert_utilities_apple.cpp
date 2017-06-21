@@ -1,27 +1,27 @@
 /***
-* ==++==
-*
-* Copyright (c) Microsoft Corporation. All rights reserved.
-* Licensed under the Apache License, Version 2.0 (the "License");
-* you may not use this file except in compliance with the License.
-* You may obtain a copy of the License at
-* http://www.apache.org/licenses/LICENSE-2.0
-*
-* Unless required by applicable law or agreed to in writing, software
-* distributed under the License is distributed on an "AS IS" BASIS,
-* WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-* See the License for the specific language governing permissions and
-* limitations under the License.
-*
-* ==--==
-* =+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
-*
-* Contains utility functions for helping to verify server certificates on OSX/iOS.
-*
-* For the latest on this and related APIs, please see: https://github.com/Microsoft/cpprestsdk
-*
-* =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
-****/
+ * ==++==
+ *
+ * Copyright (c) Microsoft Corporation. All rights reserved.
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ *
+ * ==--==
+ * =+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+=+
+ *
+ * Contains utility functions for helping to verify server certificates on OSX/iOS.
+ *
+ * For the latest on this and related APIs, please see: https://github.com/Microsoft/cpprestsdk
+ *
+ * =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
+ ****/
 
 #include "stdafx.h"
 
@@ -34,123 +34,129 @@
 #include <Security/SecTrust.h>
 
 namespace web { namespace http { namespace client { namespace details {
-
-// Simple RAII pattern wrapper to perform CFRelease on objects.
-template <typename T>
-class cf_ref
-{
-public:
-    cf_ref(T v) : value(v)
+    
+    // Simple RAII pattern wrapper to perform CFRelease on objects.
+    template <typename T>
+    class cf_ref
     {
-        static_assert(sizeof(cf_ref<T>) == sizeof(T), "Code assumes just a wrapper, see usage in CFArrayCreate below.");
-    }
-    cf_ref() : value(nullptr) {}
-    cf_ref(cf_ref &&other) : value(other.value) { other.value = nullptr; }
-
-    ~cf_ref()
-    {
-        if(value != nullptr)
+    public:
+        cf_ref(T v) : value(v)
         {
-            CFRelease(value);
+            static_assert(sizeof(cf_ref<T>) == sizeof(T), "Code assumes just a wrapper, see usage in CFArrayCreate below.");
         }
-    }
-
-    T & get()
-    {
-        return value;
-    }
-private:
-    cf_ref(const cf_ref &);
-    cf_ref & operator=(const cf_ref &);
-    T value;
-};
-
-bool verify_X509_cert_chain(const std::vector<std::string> &certChain, const std::string &hostName, const CertificateChainFunction& certInfoFunc /* = nullptr */)
-{
-    // Build up CFArrayRef with all the certificates.
-    // All this code is basically just to get into the correct structures for the Apple APIs.
-    // Copies are avoided whenever possible.
-    std::vector<cf_ref<SecCertificateRef>> certs;
-    for (const auto & certBuf : certChain)
-    {
-        cf_ref<CFDataRef> certDataRef = CFDataCreateWithBytesNoCopy(kCFAllocatorDefault,
-            reinterpret_cast<const unsigned char*>(certBuf.c_str()),
-            certBuf.size(),
-            kCFAllocatorNull);
-        if (certDataRef.get() == nullptr)
+        cf_ref() : value(nullptr) {}
+        cf_ref(cf_ref &&other) : value(other.value) { other.value = nullptr; }
+        
+        ~cf_ref()
         {
-            return false;
-        }
-
-        cf_ref<SecCertificateRef> certObj = SecCertificateCreateWithData(nullptr, certDataRef.get());
-        if (certObj.get() == nullptr)
-        {
-            return false;
-        }
-        certs.push_back(std::move(certObj));
-    }
-    cf_ref<CFArrayRef> certsArray = CFArrayCreate(kCFAllocatorDefault, const_cast<const void **>(reinterpret_cast<void **>(&certs[0])), certs.size(), nullptr);
-    if (certsArray.get() == nullptr)
-    {
-        return false;
-    }
-
-    // Create trust management object with certificates and SSL policy.
-    // Note: SecTrustCreateWithCertificates expects the certificate to be
-    // verified is the first element.
-    cf_ref<CFStringRef> cfHostName = CFStringCreateWithCStringNoCopy(kCFAllocatorDefault,
-        hostName.c_str(),
-        kCFStringEncodingASCII,
-        kCFAllocatorNull);
-    if (cfHostName.get() == nullptr)
-    {
-        return false;
-    }
-
-    cf_ref<SecPolicyRef> policy = SecPolicyCreateSSL(true /* client side */, cfHostName.get());
-    cf_ref<SecTrustRef> trust;
-    OSStatus status = SecTrustCreateWithCertificates(certsArray.get(), policy.get(), &trust.get());
-
-    bool isVerified = false;
-    if (status == noErr)
-    {
-        // Perform actual certificate verification.
-        SecTrustResultType trustResult;
-        status = SecTrustEvaluate(trust.get(), &trustResult);
-        if (status == noErr && (trustResult == kSecTrustResultUnspecified || trustResult == kSecTrustResultProceed))
-        {
-            isVerified = true;
-        }
-
-        if (certInfoFunc)
-        {
-            auto info = std::make_shared<certificate_info>(hostName);
-            info->certificate_error = (long)trustResult;
-            info->verified = isVerified;
-
-            CFIndex cnt = SecTrustGetCertificateCount(trust.get());
-            if(cnt > 0)
+            if(value != nullptr)
             {
-                std::vector<std::vector<unsigned char>> full_cert_chain;
-                full_cert_chain.reserve(cnt);
-                for (int i = 0; i < cnt; i++)
+                CFRelease(value);
+            }
+        }
+        
+        T & get()
+        {
+            return value;
+        }
+    private:
+        cf_ref(const cf_ref &);
+        cf_ref & operator=(const cf_ref &);
+        T value;
+    };
+    
+    static std::shared_ptr<certificate_info> build_certificate_info_ptr(cf_ref<SecTrustRef>& trust, const std::string& hostName, long trustResult, bool isVerified)
+    {
+        auto info = std::make_shared<certificate_info>(hostName);
+        info->certificate_error = (long)trustResult;
+        info->verified = isVerified;
+        
+        CFIndex cnt = SecTrustGetCertificateCount(trust.get());
+        if (cnt > 0)
+        {
+            info->certificate_chain.reserve(cnt);
+            for (int i = 0; i < cnt; i++)
+            {
+                SecCertificateRef cert = SecTrustGetCertificateAtIndex(trust.get(), i);
+                cf_ref<CFDataRef> cdata = SecCertificateCopyData(cert);
+                
+                const unsigned char * buffer = CFDataGetBytePtr(cdata.get());
+                info->certificate_chain.emplace_back(std::vector<unsigned char>(buffer, buffer + CFDataGetLength(cdata.get())));
+            }
+        }
+        
+        return info;
+    }
+    
+    bool verify_X509_cert_chain(const std::vector<std::string> &certChain, const std::string &hostName, const CertificateChainFunction& certInfoFunc /* = nullptr */)
+    {
+        // Build up CFArrayRef with all the certificates.
+        // All this code is basically just to get into the correct structures for the Apple APIs.
+        // Copies are avoided whenever possible.
+        std::vector<cf_ref<SecCertificateRef>> certs;
+        for (const auto & certBuf : certChain)
+        {
+            cf_ref<CFDataRef> certDataRef = CFDataCreateWithBytesNoCopy(kCFAllocatorDefault,
+                                                                        reinterpret_cast<const unsigned char*>(certBuf.c_str()),
+                                                                        certBuf.size(),
+                                                                        kCFAllocatorNull);
+            if (certDataRef.get() == nullptr)
+            {
+                return false;
+            }
+            
+            cf_ref<SecCertificateRef> certObj = SecCertificateCreateWithData(nullptr, certDataRef.get());
+            if (certObj.get() == nullptr)
+            {
+                return false;
+            }
+            certs.push_back(std::move(certObj));
+        }
+        cf_ref<CFArrayRef> certsArray = CFArrayCreate(kCFAllocatorDefault, const_cast<const void **>(reinterpret_cast<void **>(&certs[0])), certs.size(), nullptr);
+        if (certsArray.get() == nullptr)
+        {
+            return false;
+        }
+        
+        // Create trust management object with certificates and SSL policy.
+        // Note: SecTrustCreateWithCertificates expects the certificate to be
+        // verified is the first element.
+        cf_ref<CFStringRef> cfHostName = CFStringCreateWithCStringNoCopy(kCFAllocatorDefault,
+                                                                         hostName.c_str(),
+                                                                         kCFStringEncodingASCII,
+                                                                         kCFAllocatorNull);
+        if (cfHostName.get() == nullptr)
+        {
+            return false;
+        }
+        
+        cf_ref<SecPolicyRef> policy = SecPolicyCreateSSL(true /* client side */, cfHostName.get());
+        cf_ref<SecTrustRef> trust;
+        OSStatus status = SecTrustCreateWithCertificates(certsArray.get(), policy.get(), &trust.get());
+        
+        bool isVerified = false;
+        
+        if (status == noErr)
+        {
+            // Perform actual certificate verification.
+            SecTrustResultType trustResult;
+            status = SecTrustEvaluate(trust.get(), &trustResult);
+            if (status == noErr && (trustResult == kSecTrustResultUnspecified || trustResult == kSecTrustResultProceed))
+            {
+                isVerified = true;
+            }
+            
+            if (certInfoFunc)
+            {
+                auto info = build_certificate_info_ptr(trust, hostName, (long)trustResult, isVerified);
+                
+                if (!certInfoFunc(info))
                 {
-                    SecCertificateRef cert = SecTrustGetCertificateAtIndex(trust.get(), i);
-                    cf_ref<CFDataRef> cdata = SecCertificateCopyData(cert);
-
-                    const unsigned char * buffer = CFDataGetBytePtr(cdata.get());
-                    full_cert_chain.emplace_back(std::vector<unsigned char>(buffer, buffer + CFDataGetLength(cdata.get())));
+                    isVerified = false;
                 }
-                info->certificate_chain = full_cert_chain;
-            }
-
-            if (!certInfoFunc(info))
-            {
-                isVerified = false;
             }
         }
+        return isVerified;
     }
-    return isVerified;
-}
-
+    
 }}}}
