@@ -39,7 +39,6 @@ struct certificate_info
 
     certificate_info(const std::string host) : host_name(host) {};
     certificate_info(const std::string host, std::vector<std::vector<unsigned char>> chain, long error = 0) : host_name(host), certificate_chain(chain), certificate_error(error){};
-    certificate_info(const bool verified) : verified(verified) {};
 };
 
 using CertificateChainFunction = std::function<bool(const std::shared_ptr<certificate_info> certificate_Info)>;

@@ -1476,7 +1476,10 @@ private:
             return false;
         }
 
-        return m_http_client->client_config().invoke_certificate_chain_callback(std::make_shared<certificate_info>(host, get_X509_cert_chain_encoded_data(verifyCtx)));
+        auto info = std::make_shared<certificate_info>(host, get_X509_cert_chain_encoded_data(verifyCtx));
+        info->verified = true;
+
+        return m_http_client->client_config().invoke_certificate_chain_callback(info);
     }
 
     void handle_write_headers(const boost::system::error_code& ec)

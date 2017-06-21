@@ -206,7 +206,10 @@ public:
                         return false;
                     }
 
-                    return m_config.invoke_certificate_chain_callback(std::make_shared<http::client::certificate_info>(utility::conversions::to_utf8string(m_uri.host()), get_X509_cert_chain_encoded_data(verifyCtx)));
+                    auto info = std::make_shared<http::client::certificate_info>(utility::conversions::to_utf8string(m_uri.host()), get_X509_cert_chain_encoded_data(verifyCtx));
+                    info->verified = true;
+
+                    return m_config.invoke_certificate_chain_callback(info);
                 });
 
                 // OpenSSL stores some per thread state that never will be cleaned up until
