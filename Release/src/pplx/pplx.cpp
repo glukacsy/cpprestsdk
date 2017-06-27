@@ -110,11 +110,13 @@ static struct _pplx_g_sched_t
         }
 
         ::pplx::details::_Scoped_spin_lock lock(m_spinlock);
-
+#if 0 
+        // Removed to let UT overrides scheduler
         if (m_scheduler != nullptr)
         {
             throw invalid_operation("Scheduler is already initialized");
         }
+#endif
 
         m_scheduler = std::move(scheduler);
     }
