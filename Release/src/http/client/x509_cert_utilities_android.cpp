@@ -70,7 +70,7 @@ bool jni_failed(JNIEnv *env, const jmethodID &result)
 #define CHECK_JMID(env, mid) if(jni_failed(env, mid)) return false;
 #define CHECK_JNI(env) if(jni_failed(env)) return false;
 
-bool verify_X509_cert_chain(const std::vector<std::string> &certChain, const std::string &hostName)
+bool verify_X509_cert_chain(const std::vector<std::string> &certChain, const std::string &hostName, const CertificateChainFunction&/* = nullptr */)
 {
     JNIEnv* env = get_jvm_env();
 
