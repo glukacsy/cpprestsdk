@@ -24,6 +24,7 @@
 
 #include "pplx/pplxtasks.h"
 #include "cpprest/uri.h"
+#include "cpprest/certificate_info.h"
 #include "cpprest/details/web_utilities.h"
 #include "cpprest/http_headers.h"
 #include "cpprest/json.h"
@@ -62,8 +63,6 @@ enum class websocket_close_status
     server_terminate = 1011,
 };
 
-using CertificateChainCallBackFunction = std::function<bool(const utility::string_t&, const std::vector<std::vector<unsigned char>>&)>;
-
 /// <summary>
 /// Websocket client configuration class, used to set the possible configuration options
 /// used to create an websocket_client instance.
@@ -76,7 +75,7 @@ public:
     /// Creates a websocket client configuration with default settings.
     /// </summary>
     websocket_client_config() : 
-        m_certificate_chain_callback([](const utility::string_t&, const std::vector<std::vector<unsigned char>>&)->bool { return true; }) // by default certificate chain callback returns success.
+        m_certificate_chain_callback([](const std::shared_ptr<http::client::certificate_info>&)->bool { return true; })
         , m_validate_certificates(true)
         , m_sni_enabled(true) {}
 
@@ -204,7 +203,7 @@ public:
     /// <summary>
     /// Set the certificate chain callback. If set, HTTP client will call this callback in a blocking manner during HTTP connection.
     /// </summary>
-    void set_user_certificate_chain_callback(const CertificateChainCallBackFunction& callback)
+    void set_user_certificate_chain_callback(const http::client::CertificateChainFunction& callback)
     {
         m_certificate_chain_callback = callback;
     }
@@ -212,12 +211,11 @@ public:
     /// <summary>
     /// Invokes the certificate chain callback.
     /// </summary>
-    /// <param name="url">The URL in the actual TLS session which might be different than the original URL due to redirection.</param>
-    /// <param name="certificate">The cert_chain is the encoded data of the certificate chain, used by the client for validation purposes however it wants.</param>
+    /// <param name="certificate_info">Pointer to the certificate_info struct that has the certificate information.</param>
     /// <returns>True if the consumer code allows the connection, false otherwise. False will terminate the HTTP connection.</returns>
-    bool invoke_certificate_chain_callback(const utility::string_t& url, const std::vector<std::vector<unsigned char>>& cert_chain) const
+    bool invoke_certificate_chain_callback(const std::shared_ptr<http::client::certificate_info>& certificate_Info) const
     {
-        return m_certificate_chain_callback(url, cert_chain);
+        return m_certificate_chain_callback(certificate_Info);
     }
 
 private:
@@ -230,7 +228,7 @@ private:
     PinningCallBackFunction m_certificate_pinning_callback;
 
     rejected_certificate_callback_function m_rejected_certificates_callback;
-    CertificateChainCallBackFunction m_certificate_chain_callback;
+    http::client::CertificateChainFunction m_certificate_chain_callback;
 };
 
 /// <summary>

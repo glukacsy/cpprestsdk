@@ -16,6 +16,7 @@
 #define _CASA_OAUTH2_H
 
 #include "cpprest/http_msg.h"
+#include "cpprest/certificate_info.h"
 #include "cpprest/details/web_utilities.h"
 
 namespace web
@@ -53,8 +54,6 @@ public:
 /// oAuth functionality is currently in beta.
 namespace experimental
 {
-
-using CertificateChainCallBackFunction = std::function<bool(const utility::string_t&, const std::vector<std::vector<unsigned char>>&)>;
 
 /// <summary>
 /// Exception type for OAuth 2.0 errors.
@@ -219,7 +218,7 @@ public:
                 m_bearer_auth(true),
                 m_http_basic_auth(true),
                 m_access_token_key(details::oauth2_strings::access_token),
-                m_certificate_chain_callback([](const utility::string_t&, const std::vector<std::vector<unsigned char>>&)->bool { return true; })
+                m_certificate_chain_callback([](const std::shared_ptr<web::http::client::certificate_info>&)->bool { return true; })
     {}
 
     /// <summary>
@@ -473,13 +472,13 @@ public:
     /// <summary>
     /// Set the certificate chain callback to be used by the http client.
     /// </summary>
-    void set_user_certificate_chain_callback(const CertificateChainCallBackFunction& callback) { m_certificate_chain_callback = callback; }
+    void set_user_certificate_chain_callback(const web::http::client::CertificateChainFunction& callback) { m_certificate_chain_callback = callback; }
 
     /// <summary>
     /// Get the cert chain callback.
     /// </summary>
     /// <returns>A reference to cert chain callback user by the client.</returns>
-    const CertificateChainCallBackFunction& user_certificate_chain_callback() { return m_certificate_chain_callback; }
+    const web::http::client::CertificateChainFunction& user_certificate_chain_callback() { return m_certificate_chain_callback; }
 
 private:
     friend class web::http::client::http_client_config;
@@ -529,7 +528,7 @@ private:
     // Warning  - this field caused a crash on mac when it was in the middle of the structure instead of at the end
 	web::web_proxy m_proxy;
 
-    CertificateChainCallBackFunction m_certificate_chain_callback;
+    web::http::client::CertificateChainFunction m_certificate_chain_callback;
 };
 
 } // namespace web::http::oauth2::experimental

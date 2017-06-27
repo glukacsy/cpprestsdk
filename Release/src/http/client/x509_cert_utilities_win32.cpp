@@ -50,14 +50,53 @@ struct cert_free_certificate_chain
 };
 typedef std::unique_ptr<const CERT_CHAIN_CONTEXT, cert_free_certificate_chain> chain_context;
 
-bool verify_X509_cert_chain(const std::vector<std::string> &certChain, const std::string &)
+static std::shared_ptr<certificate_info> build_certificate_info_ptr(const chain_context& chain, const std::string& hostName, bool isVerified)
 {
+    auto info = std::make_shared<certificate_info>(hostName);
 
+    info->verified = isVerified;
+    info->certificate_error = chain->TrustStatus.dwErrorStatus;
+    info->certificate_chain.reserve((int)chain->cChain);
+
+    for (size_t i = 0; i < chain->cChain; ++i)
+    {
+        auto pChain = chain->rgpChain[i];
+        for (size_t j = 0; j < pChain->cElement; ++j)
+        {
+            auto chainElement = pChain->rgpElement[j];
+            auto cert = chainElement->pCertContext;
+            if (cert)
+            {
+                info->certificate_chain.emplace_back(std::vector<unsigned char>(cert->pbCertEncoded, cert->pbCertEncoded + (int)cert->cbCertEncoded));
+            }
+        }
+    }
+
+    return info;
+}
+
+bool verify_X509_cert_chain(const std::vector<std::string> &certChain, const std::string &hostName, const CertificateChainFunction& certInfoFunc /* = nullptr */)
+{
     // Create certificate context from server certificate.
-    cert_context cert(CertCreateCertificateContext(X509_ASN_ENCODING | PKCS_7_ASN_ENCODING, reinterpret_cast<const unsigned char *>(certChain[0].c_str()), static_cast<DWORD>(certChain[0].size())));
-    if (cert == nullptr)
+    cert_context pCert(CertCreateCertificateContext(X509_ASN_ENCODING | PKCS_7_ASN_ENCODING, reinterpret_cast<const unsigned char *>(certChain[0].c_str()), static_cast<DWORD>(certChain[0].size())));
+    if (pCert == nullptr)
     {
         return false;
+    }
+
+    // Add all SSL intermediate certs into a store to be used by the OS building the full certificate chain.
+    HCERTSTORE caMemStore = NULL;
+    caMemStore = CertOpenStore(CERT_STORE_PROV_MEMORY, (PKCS_7_ASN_ENCODING | X509_ASN_ENCODING), NULL, 0, NULL);
+    if (caMemStore)
+    {
+        for (const auto& certData : certChain)
+        {
+            cert_context certContext(CertCreateCertificateContext(X509_ASN_ENCODING | PKCS_7_ASN_ENCODING, reinterpret_cast<const unsigned char *>(certData.c_str()), static_cast<DWORD>(certData.size())));
+            if (certContext)
+            {
+                CertAddCertificateContextToStore(caMemStore, certContext.get(), CERT_STORE_ADD_ALWAYS, NULL);
+            }
+        }
     }
 
     // Let the OS build a certificate chain from the server certificate.
@@ -76,54 +115,49 @@ bool verify_X509_cert_chain(const std::vector<std::string> &certChain, const std
     params.RequestedUsage.Usage.cUsageIdentifier = std::extent<decltype(usages)>::value;
     params.RequestedUsage.Usage.rgpszUsageIdentifier = usages;
 
-    // Add all SSL certs into a store, to be used when building the cert chain.
-    HCERTSTORE caMemStore = NULL;
-    caMemStore = CertOpenStore(CERT_STORE_PROV_MEMORY, (PKCS_7_ASN_ENCODING | X509_ASN_ENCODING), NULL, 0, NULL);
-    if (caMemStore)
-    {
-        for (const auto& certData : certChain)
-        {
-            PCCERT_CONTEXT certContext = CertCreateCertificateContext(X509_ASN_ENCODING | PKCS_7_ASN_ENCODING, reinterpret_cast<const unsigned char *>(certData.c_str()), static_cast<DWORD>(certData.size()));
-            if (certContext)
-            {
-                CertAddCertificateContextToStore(caMemStore, certContext, CERT_STORE_ADD_ALWAYS, NULL);
-                CertFreeCertificateContext(certContext);
-            }
-        }
-    }
-
-    PCCERT_CHAIN_CONTEXT chainContext;
+    PCCERT_CHAIN_CONTEXT pChainContext = {};
     chain_context chain;
+
+    bool isVerified = false;
+
     auto cSuccess = CertGetCertificateChain(
         nullptr,
-        cert.get(),
+        pCert.get(),
         nullptr,
         caMemStore,
         &params,
         CERT_CHAIN_REVOCATION_CHECK_CHAIN,
         nullptr,
-        &chainContext);
+        &pChainContext);
+
+    chain.reset(pChainContext);
 
     if (caMemStore)
     {
         CertCloseStore(caMemStore, 0);
     }
 
-    if (!cSuccess)
+    if (cSuccess && chain)
     {
-        return false;
-    }
+        // Only do revocation checking if it's known.
+        if (chain->TrustStatus.dwErrorStatus == CERT_TRUST_NO_ERROR ||
+            chain->TrustStatus.dwErrorStatus == CERT_TRUST_REVOCATION_STATUS_UNKNOWN ||
+            chain->TrustStatus.dwErrorStatus == (CERT_TRUST_IS_OFFLINE_REVOCATION | CERT_TRUST_REVOCATION_STATUS_UNKNOWN))
+        {
+            isVerified = true;
+        }
 
-    chain.reset(chainContext);
+        if (certInfoFunc)
+        {
+            auto info = build_certificate_info_ptr(chain, hostName, isVerified);
 
-    // Only do revocation checking if it's known.
-    if (chain->TrustStatus.dwErrorStatus == CERT_TRUST_NO_ERROR ||
-        chain->TrustStatus.dwErrorStatus == CERT_TRUST_REVOCATION_STATUS_UNKNOWN ||
-        chain->TrustStatus.dwErrorStatus == (CERT_TRUST_IS_OFFLINE_REVOCATION | CERT_TRUST_REVOCATION_STATUS_UNKNOWN))
-    {
-        return true;
+            if (!certInfoFunc(info))
+            {
+                isVerified = false;
+            }
+        }
     }
-    return false;
+    return isVerified;
 }
 
 }}}}

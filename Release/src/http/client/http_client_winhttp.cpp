@@ -1087,6 +1087,7 @@ private:
                 WinHttpQueryOption(hRequestHandle, WINHTTP_OPTION_SERVER_CERT_CONTEXT, &pCert, &dwSize);
 
                 std::vector<std::vector<unsigned char>> cert_chain;
+                DWORD dwErrorStatus = 0;
 
                 if (pCert)
                 {
@@ -1116,24 +1117,18 @@ private:
 
                     if (validChain && pChainContext)
                     {
-                        // Only do revocation checking if it's known.
-                        if (pChainContext->TrustStatus.dwErrorStatus == CERT_TRUST_NO_ERROR ||
-                            pChainContext->TrustStatus.dwErrorStatus == CERT_TRUST_REVOCATION_STATUS_UNKNOWN ||
-                            pChainContext->TrustStatus.dwErrorStatus == (CERT_TRUST_IS_OFFLINE_REVOCATION | CERT_TRUST_REVOCATION_STATUS_UNKNOWN))
+                        dwErrorStatus = pChainContext->TrustStatus.dwErrorStatus;
+                        cert_chain.reserve((int)pChainContext->cChain);
+                        for (size_t i = 0; i < pChainContext->cChain; ++i)
                         {
-                            cert_chain.reserve((int)pChainContext->cChain);
-                            for (size_t i = 0; i < pChainContext->cChain; ++i)
+                            auto chain = pChainContext->rgpChain[i];
+                            for (size_t j = 0; j < chain->cElement; ++j)
                             {
-                                auto chain = pChainContext->rgpChain[i];
-                                for (size_t j = 0; j < chain->cElement; ++j)
+                                auto chainElement = chain->rgpElement[j];
+                                auto cert = chainElement->pCertContext;
+                                if (cert)
                                 {
-                                    auto chainElement = chain->rgpElement[j];
-                                    auto cert = chainElement->pCertContext;
-                                    if (cert)
-                                    {
-                                        std::vector<unsigned char> certData(cert->pbCertEncoded, cert->pbCertEncoded + (int)cert->cbCertEncoded);
-                                        cert_chain.emplace_back(certData);
-                                    }
+                                    cert_chain.emplace_back(std::vector<unsigned char>(cert->pbCertEncoded, cert->pbCertEncoded + (int)cert->cbCertEncoded));
                                 }
                             }
                         }
@@ -1141,7 +1136,26 @@ private:
                     }
                     CertFreeCertificateContext(pCert);
                 }
-                if (!p_request_context->m_http_client->client_config().invoke_certificate_chain_callback(url, cert_chain))
+
+                auto info = std::make_shared<certificate_info>(utility::conversions::to_utf8string(web::uri(url).host()), cert_chain, dwErrorStatus);
+
+                if (dwErrorStatus == CERT_TRUST_NO_ERROR || dwErrorStatus == CERT_TRUST_REVOCATION_STATUS_UNKNOWN || dwErrorStatus == (CERT_TRUST_IS_OFFLINE_REVOCATION | CERT_TRUST_REVOCATION_STATUS_UNKNOWN))
+                {
+                    info->verified = true;
+                }
+
+                if (p_request_context->m_http_client->client_config().invoke_certificate_chain_callback(info))
+                {
+                    if (info->verified)
+                    {
+                        p_request_context->m_certificate_chain_verification_failed = false;
+                    }
+                    else
+                    {
+                        p_request_context->m_certificate_chain_verification_failed = true;
+                    }
+                }
+                else
                 {
                     p_request_context->m_certificate_chain_verification_failed = true;
                 }
