@@ -68,7 +68,7 @@ namespace web { namespace http { namespace client { namespace details {
     static std::shared_ptr<certificate_info> build_certificate_info_ptr(cf_ref<SecTrustRef>& trust, const std::string& hostName, long trustResult, bool isVerified)
     {
         auto info = std::make_shared<certificate_info>(hostName);
-        info->certificate_error = (long)trustResult;
+        info->certificate_error = trustResult;
         info->verified = isVerified;
         
         CFIndex cnt = SecTrustGetCertificateCount(trust.get());
@@ -78,13 +78,18 @@ namespace web { namespace http { namespace client { namespace details {
             for (int i = 0; i < cnt; i++)
             {
                 SecCertificateRef cert = SecTrustGetCertificateAtIndex(trust.get(), i);
-                cf_ref<CFDataRef> cdata = SecCertificateCopyData(cert);
+                if(cert)
+                {
+                    cf_ref<CFDataRef> cdata = SecCertificateCopyData(cert);
                 
-                const unsigned char * buffer = CFDataGetBytePtr(cdata.get());
-                info->certificate_chain.emplace_back(std::vector<unsigned char>(buffer, buffer + CFDataGetLength(cdata.get())));
+                    if(cdata.get())
+                    {
+                        const unsigned char * buffer = CFDataGetBytePtr(cdata.get());
+                        info->certificate_chain.emplace_back(std::vector<unsigned char>(buffer, buffer + CFDataGetLength(cdata.get())));
+                    }
+                }
             }
         }
-        
         return info;
     }
     
