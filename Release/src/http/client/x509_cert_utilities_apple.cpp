@@ -78,15 +78,16 @@ namespace web { namespace http { namespace client { namespace details {
             for (int i = 0; i < cnt; i++)
             {
                 SecCertificateRef cert = SecTrustGetCertificateAtIndex(trust.get(), i);
-                if(cert)
+                if(!cert)
                 {
-                    cf_ref<CFDataRef> cdata = SecCertificateCopyData(cert);
+                    break;
+                }
                 
-                    if(cdata.get())
-                    {
-                        const unsigned char * buffer = CFDataGetBytePtr(cdata.get());
-                        info->certificate_chain.emplace_back(std::vector<unsigned char>(buffer, buffer + CFDataGetLength(cdata.get())));
-                    }
+                cf_ref<CFDataRef> cdata = SecCertificateCopyData(cert);
+                if(cdata.get())
+                {
+                    const unsigned char * buffer = CFDataGetBytePtr(cdata.get());
+                    info->certificate_chain.emplace_back(std::vector<unsigned char>(buffer, buffer + CFDataGetLength(cdata.get())));
                 }
             }
         }
