@@ -76,7 +76,6 @@ public:
     /// </summary>
     websocket_client_config() : 
         m_certificate_chain_callback([](const std::shared_ptr<http::client::certificate_info>&)->bool { return true; })
-        , m_validate_certificates(true)
         , m_sni_enabled(true) {}
 
     /// <summary>
@@ -180,25 +179,6 @@ public:
     /// <remarks>If you want all the subprotocols in a comma separated string
     /// they can be directly looked up in the headers using 'Sec-WebSocket-Protocol'.</remarks>
     _ASYNCRTIMP std::vector<::utility::string_t> subprotocols() const;
-	
-    /// <summary>
-    /// Gets the server certificate validation property.
-    /// </summary>
-    /// <returns>True if certificates are to be verified, false otherwise.</returns>
-    bool validate_certificates() const
-    {
-        return m_validate_certificates;
-    }
-	
-    /// <summary>
-    /// Sets the server certificate validation property.
-    /// </summary>
-    /// <param name="validate_certs">False to turn ignore all server certificate validation errors, true otherwise.</param>
-    /// <remarks>Note ignoring certificate errors can be dangerous and should be done with caution.</remarks>
-    void set_validate_certificates(bool validate_certs)
-    {
-        m_validate_certificates = validate_certs;
-    }
 
     /// <summary>
     /// Set the certificate chain callback. If set, HTTP client will call this callback in a blocking manner during HTTP connection.
@@ -207,7 +187,7 @@ public:
     {
         m_certificate_chain_callback = callback;
     }
-
+    
     /// <summary>
     /// Invokes the certificate chain callback.
     /// </summary>
@@ -224,10 +204,6 @@ private:
     web::http::http_headers m_headers;
     bool m_sni_enabled;
     utf8string m_sni_hostname;
-    bool m_validate_certificates;
-    PinningCallBackFunction m_certificate_pinning_callback;
-
-    rejected_certificate_callback_function m_rejected_certificates_callback;
     http::client::CertificateChainFunction m_certificate_chain_callback;
 };
 

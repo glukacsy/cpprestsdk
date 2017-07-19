@@ -13,7 +13,7 @@
 
 #include "stdafx.h"
 
-#if defined(__APPLE__) || (defined(ANDROID) || defined(__ANDROID__)) || (defined(_WIN32)  && !defined(__cplusplus_winrt) && !defined(_M_ARM) && !defined(CPPREST_EXCLUDE_WEBSOCKETS))
+#if defined(__APPLE__) || (defined(ANDROID) || defined(__ANDROID__)) || (defined(_WIN32)  && !defined(__cplusplus_winrt) && !defined(_M_ARM) && !defined(CPPREST_EXCLUDE_WEBSOCKETS)) || defined(__linux__)
 
 #include "cpprest/details/x509_cert_utilities.h"
 #include <vector>
@@ -41,12 +41,6 @@
 namespace web { namespace http { namespace client { namespace details {
 
 static bool verify_X509_cert_chain(const std::vector<std::string> &certChain, const std::string &hostName);
-
-class web::json::value;
-
-#if defined(__APPLE__) || (defined(ANDROID) || defined(__ANDROID__)) || (defined(_WIN32)  && !defined(__cplusplus_winrt) && !defined(_M_ARM) && !defined(CPPREST_EXCLUDE_WEBSOCKETS)) || defined(__linux__)
-
-#ifndef __linux__
 
 bool is_end_certificate_in_chain(boost::asio::ssl::verify_context &verifyCtx)
 {
@@ -350,63 +344,105 @@ namespace {
     };
 }
 
-bool verify_X509_cert_chain(const std::vector<std::string> &certChain, const std::string &hostName)
-{
-    // Build up CFArrayRef with all the certificates.
-    // All this code is basically just to get into the correct structures for the Apple APIs.
-    // Copies are avoided whenever possible.
-    std::vector<cf_ref<SecCertificateRef>> certs;
-    for(const auto & certBuf : certChain)
+    static std::shared_ptr<certificate_info> build_certificate_info_ptr(cf_ref<SecTrustRef>& trust, const std::string& hostName, long trustResult, bool isVerified)
     {
-        cf_ref<CFDataRef> certDataRef = CFDataCreateWithBytesNoCopy(kCFAllocatorDefault,
-                                                                   reinterpret_cast<const unsigned char*>(certBuf.c_str()),
-                                                                   certBuf.size(),
-                                                                   kCFAllocatorNull);
-        if(certDataRef.get() == nullptr)
+        auto info = std::make_shared<certificate_info>(hostName);
+        info->certificate_error = trustResult;
+        info->verified = isVerified;
+        
+        CFIndex cnt = SecTrustGetCertificateCount(trust.get());
+        if (cnt > 0)
+        {
+            info->certificate_chain.reserve(cnt);
+            for (int i = 0; i < cnt; i++)
+            {
+                SecCertificateRef cert = SecTrustGetCertificateAtIndex(trust.get(), i);
+                if(!cert)
+                {
+                    break;
+                }
+                
+                cf_ref<CFDataRef> cdata = SecCertificateCopyData(cert);
+                if(cdata.get())
+                {
+                    const unsigned char * buffer = CFDataGetBytePtr(cdata.get());
+                    info->certificate_chain.emplace_back(std::vector<unsigned char>(buffer, buffer + CFDataGetLength(cdata.get())));
+                }
+            }
+        }
+        return info;
+    }
+    
+    bool verify_X509_cert_chain(const std::vector<std::string> &certChain, const std::string &hostName, const CertificateChainFunction& certInfoFunc /* = nullptr */)
+    {
+        // Build up CFArrayRef with all the certificates.
+        // All this code is basically just to get into the correct structures for the Apple APIs.
+        // Copies are avoided whenever possible.
+        std::vector<cf_ref<SecCertificateRef>> certs;
+        for (const auto & certBuf : certChain)
+        {
+            cf_ref<CFDataRef> certDataRef = CFDataCreateWithBytesNoCopy(kCFAllocatorDefault,
+                                                                        reinterpret_cast<const unsigned char*>(certBuf.c_str()),
+                                                                        certBuf.size(),
+                                                                        kCFAllocatorNull);
+            if (certDataRef.get() == nullptr)
+            {
+                return false;
+            }
+            
+            cf_ref<SecCertificateRef> certObj = SecCertificateCreateWithData(nullptr, certDataRef.get());
+            if (certObj.get() == nullptr)
+            {
+                return false;
+            }
+            certs.push_back(std::move(certObj));
+        }
+        cf_ref<CFArrayRef> certsArray = CFArrayCreate(kCFAllocatorDefault, const_cast<const void **>(reinterpret_cast<void **>(&certs[0])), certs.size(), nullptr);
+        if (certsArray.get() == nullptr)
         {
             return false;
         }
-
-        cf_ref<SecCertificateRef> certObj = SecCertificateCreateWithData(nullptr, certDataRef.get());
-        if(certObj.get() == nullptr)
+        
+        // Create trust management object with certificates and SSL policy.
+        // Note: SecTrustCreateWithCertificates expects the certificate to be
+        // verified is the first element.
+        cf_ref<CFStringRef> cfHostName = CFStringCreateWithCStringNoCopy(kCFAllocatorDefault,
+                                                                         hostName.c_str(),
+                                                                         kCFStringEncodingASCII,
+                                                                         kCFAllocatorNull);
+        if (cfHostName.get() == nullptr)
         {
             return false;
         }
-        certs.push_back(std::move(certObj));
-    }
-    cf_ref<CFArrayRef> certsArray = CFArrayCreate(kCFAllocatorDefault, const_cast<const void **>(reinterpret_cast<void **>(&certs[0])), certs.size(), nullptr);
-    if(certsArray.get() == nullptr)
-    {
-        return false;
-    }
-
-    // Create trust management object with certificates and SSL policy.
-    // Note: SecTrustCreateWithCertificates expects the certificate to be
-    // verified is the first element.
-    cf_ref<CFStringRef> cfHostName = CFStringCreateWithCStringNoCopy(kCFAllocatorDefault,
-                                                                    hostName.c_str(),
-                                                                    kCFStringEncodingASCII,
-                                                                    kCFAllocatorNull);
-    if(cfHostName.get() == nullptr)
-    {
-        return false;
-    }
-    cf_ref<SecPolicyRef> policy = SecPolicyCreateSSL(true /* client side */, cfHostName.get());
-    cf_ref<SecTrustRef> trust;
-    OSStatus status = SecTrustCreateWithCertificates(certsArray.get(), policy.get(), &trust.get());
-    if(status == noErr)
-    {
-        // Perform actual certificate verification.
-        SecTrustResultType trustResult;
-        status = SecTrustEvaluate(trust.get(), &trustResult);
-        if(status == noErr && (trustResult == kSecTrustResultUnspecified || trustResult == kSecTrustResultProceed))
+        
+        cf_ref<SecPolicyRef> policy = SecPolicyCreateSSL(true /* client side */, cfHostName.get());
+        cf_ref<SecTrustRef> trust;
+        OSStatus status = SecTrustCreateWithCertificates(certsArray.get(), policy.get(), &trust.get());
+        
+        bool isVerified = false;
+        
+        if (status == noErr)
         {
-            return true;
+            // Perform actual certificate verification.
+            SecTrustResultType trustResult;
+            status = SecTrustEvaluate(trust.get(), &trustResult);
+            if (status == noErr && (trustResult == kSecTrustResultUnspecified || trustResult == kSecTrustResultProceed))
+            {
+                isVerified = true;
+            }
+            
+            if (certInfoFunc)
+            {
+                auto info = build_certificate_info_ptr(trust, hostName, (long)trustResult, isVerified);
+                
+                if (!certInfoFunc(info))
+                {
+                    isVerified = false;
+                }
+            }
         }
+        return isVerified;
     }
-
-    return false;
-}
 
 #endif
 
@@ -465,16 +501,53 @@ namespace {
     typedef std::unique_ptr<const CERT_CHAIN_CONTEXT, cert_free_certificate_chain> chain_context;
 }
 
-bool verify_X509_cert_chain(const std::vector<std::string> &certChain, const std::string &)
+static std::shared_ptr<certificate_info> build_certificate_info_ptr(const chain_context& chain, const std::string& hostName, bool isVerified)
+{
+    auto info = std::make_shared<certificate_info>(hostName);
+
+    info->verified = isVerified;
+    info->certificate_error = chain->TrustStatus.dwErrorStatus;
+    info->certificate_chain.reserve((int)chain->cChain);
+
+    for (size_t i = 0; i < chain->cChain; ++i)
+    {
+        auto pChain = chain->rgpChain[i];
+        for (size_t j = 0; j < pChain->cElement; ++j)
+        {
+            auto chainElement = pChain->rgpElement[j];
+            auto cert = chainElement->pCertContext;
+            if (cert)
+            {
+                info->certificate_chain.emplace_back(std::vector<unsigned char>(cert->pbCertEncoded, cert->pbCertEncoded + (int)cert->cbCertEncoded));
+            }
+        }
+    }
+
+    return info;
+}
+
+bool verify_X509_cert_chain(const std::vector<std::string> &certChain, const std::string &hostName, const CertificateChainFunction& certInfoFunc /* = nullptr */)
 {
     // Create certificate context from server certificate.
-    cert_context cert(CertCreateCertificateContext(
-        X509_ASN_ENCODING | PKCS_7_ASN_ENCODING,
-        reinterpret_cast<const unsigned char *>(certChain[0].c_str()),
-        static_cast<DWORD>(certChain[0].size())));
-    if (cert == nullptr)
+    cert_context pCert(CertCreateCertificateContext(X509_ASN_ENCODING | PKCS_7_ASN_ENCODING, reinterpret_cast<const unsigned char *>(certChain[0].c_str()), static_cast<DWORD>(certChain[0].size())));
+    if (pCert == nullptr)
     {
         return false;
+    }
+
+    // Add all SSL intermediate certs into a store to be used by the OS building the full certificate chain.
+    HCERTSTORE caMemStore = NULL;
+    caMemStore = CertOpenStore(CERT_STORE_PROV_MEMORY, (PKCS_7_ASN_ENCODING | X509_ASN_ENCODING), NULL, 0, NULL);
+    if (caMemStore)
+    {
+        for (const auto& certData : certChain)
+        {
+            cert_context certContext(CertCreateCertificateContext(X509_ASN_ENCODING | PKCS_7_ASN_ENCODING, reinterpret_cast<const unsigned char *>(certData.c_str()), static_cast<DWORD>(certData.size())));
+            if (certContext)
+            {
+                CertAddCertificateContextToStore(caMemStore, certContext.get(), CERT_STORE_ADD_ALWAYS, NULL);
+            }
+        }
     }
 
     // Let the OS build a certificate chain from the server certificate.
@@ -482,7 +555,7 @@ bool verify_X509_cert_chain(const std::vector<std::string> &certChain, const std
     ZeroMemory(&params, sizeof(params));
     params.cbSize = sizeof(CERT_CHAIN_PARA);
     params.RequestedUsage.dwType = USAGE_MATCH_TYPE_OR;
-    LPSTR usages [] =
+    LPSTR usages[] =
     {
         szOID_PKIX_KP_SERVER_AUTH,
 
@@ -492,29 +565,50 @@ bool verify_X509_cert_chain(const std::vector<std::string> &certChain, const std
     };
     params.RequestedUsage.Usage.cUsageIdentifier = std::extent<decltype(usages)>::value;
     params.RequestedUsage.Usage.rgpszUsageIdentifier = usages;
-    PCCERT_CHAIN_CONTEXT chainContext;
+
+    PCCERT_CHAIN_CONTEXT pChainContext = {};
     chain_context chain;
-    if (!CertGetCertificateChain(
+
+    bool isVerified = false;
+
+    auto cSuccess = CertGetCertificateChain(
         nullptr,
-        cert.get(),
+        pCert.get(),
         nullptr,
-        nullptr,
+        caMemStore,
         &params,
         CERT_CHAIN_REVOCATION_CHECK_CHAIN,
         nullptr,
-        &chainContext))
-    {
-        return false;
-    }
-    chain.reset(chainContext);
+        &pChainContext);
 
-    // Check to see if the certificate chain is actually trusted.
-    if (chain->TrustStatus.dwErrorStatus != CERT_TRUST_NO_ERROR)
+    chain.reset(pChainContext);
+
+    if (caMemStore)
     {
-        return false;
+        CertCloseStore(caMemStore, 0);
     }
 
-    return true;
+    if (cSuccess && chain)
+    {
+        // Only do revocation checking if it's known.
+        if (chain->TrustStatus.dwErrorStatus == CERT_TRUST_NO_ERROR ||
+            chain->TrustStatus.dwErrorStatus == CERT_TRUST_REVOCATION_STATUS_UNKNOWN ||
+            chain->TrustStatus.dwErrorStatus == (CERT_TRUST_IS_OFFLINE_REVOCATION | CERT_TRUST_REVOCATION_STATUS_UNKNOWN))
+        {
+            isVerified = true;
+        }
+
+        if (certInfoFunc)
+        {
+            auto info = build_certificate_info_ptr(chain, hostName, isVerified);
+
+            if (!certInfoFunc(info))
+            {
+                isVerified = false;
+            }
+        }
+    }
+    return isVerified;
 }
 #endif
 

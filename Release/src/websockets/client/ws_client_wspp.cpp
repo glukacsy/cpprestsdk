@@ -11,8 +11,6 @@
 * =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-
 ****/
 
-#define _SCL_SECURE_NO_WARNINGS // Avoid a warning from WebSocketpp (Windows) + turned off PCHs for this cpp.
-
 #include "stdafx.h"
 
 #include "cpprest/details/x509_cert_utilities.h"
@@ -36,8 +34,7 @@
 #include <websocketpp/config/asio_no_tls_client.hpp>
 #include <websocketpp/client.hpp>
 #pragma GCC diagnostic pop
-#else /* __GNUC__ */
-#if defined(_MSC_VER)
+#elif defined(_MSC_VER)
 #pragma warning( push )
 #pragma warning( disable : 4100 4127 4512 4996 4701 4267 )
 #define _WEBSOCKETPP_CPP11_STL_
@@ -192,14 +189,6 @@ public:
                 auto sslContext = websocketpp::lib::shared_ptr<boost::asio::ssl::context>(new boost::asio::ssl::context(boost::asio::ssl::context::sslv23));
                 sslContext->set_default_verify_paths();
                 sslContext->set_options(boost::asio::ssl::context::default_workarounds);
-                if (m_config.validate_certificates())
-                {
-                    sslContext->set_verify_mode(boost::asio::ssl::context::verify_peer);
-                }
-                else
-                {
-                    sslContext->set_verify_mode(boost::asio::ssl::context::verify_none);
-                }
 
 #if defined(__APPLE__) || (defined(ANDROID) || defined(__ANDROID__)) || defined(_WIN32)
                 m_openssl_failed = false;
@@ -423,7 +412,7 @@ public:
             const auto &cred = proxy.credentials();
             if (cred.is_set())
             {
-                con->set_proxy_basic_auth(utility::conversions::to_utf8string(cred.username()), utility::conversions::to_utf8string(*cred.decrypt()));
+                con->set_proxy_basic_auth(utility::conversions::to_utf8string(cred.username()), utility::conversions::to_utf8string(*cred._internal_decrypt()));
             }
         }
 

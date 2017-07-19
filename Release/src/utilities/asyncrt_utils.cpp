@@ -274,7 +274,7 @@ inline size_t count_utf8_to_utf16(const std::string& s)
 {
 #if defined(CPPREST_STDLIB_UNICODE_CONVERSIONS)
     std::wstring_convert<std::codecvt_utf8_utf16<utf16char>, utf16char> conversion;
-    return conversion.from_bytes(s);
+    return conversion.from_bytes(s).size();
 #else
     const size_t sSize = s.size();
     const char* const sData = s.data();
@@ -353,6 +353,10 @@ inline size_t count_utf8_to_utf16(const std::string& s)
 
 utf16string __cdecl conversions::utf8_to_utf16(const std::string &s)
 {
+#if defined(CPPREST_STDLIB_UNICODE_CONVERSIONS)
+    std::wstring_convert<std::codecvt_utf8_utf16<utf16char>, utf16char> conversion;
+    return conversion.from_bytes(s);
+#else
     // Save repeated heap allocations, use the length of resulting sequence.
     const size_t srcSize = s.size();
     const std::string::value_type* const srcData = &s[0];
@@ -409,6 +413,7 @@ utf16string __cdecl conversions::utf8_to_utf16(const std::string &s)
         }
     }
     return dest;
+#endif
 }
 
 
@@ -418,15 +423,14 @@ inline size_t count_utf16_to_utf8(const utf16string &w)
     try
     {
         std::wstring_convert<std::codecvt_utf8_utf16<utf16char>, utf16char> conversion;
-        return conversion.to_bytes(w);
+        return conversion.to_bytes(w).size();
     }
     catch (std::range_error& exception)
     {
         std::cout << exception.what();
     }
     
-    return "**ERROR_PROCESSING_CONTENT**";
-    
+    throw std::range_error("**ERROR_PROCESSING_CONTENT**");
  #else
     const utf16string::value_type * const srcData = &w[0];
     const size_t srcSize = w.size();
@@ -470,6 +474,20 @@ inline size_t count_utf16_to_utf8(const utf16string &w)
 
 std::string __cdecl conversions::utf16_to_utf8(const utf16string &w)
 {
+#if defined(CPPREST_STDLIB_UNICODE_CONVERSIONS)
+    try
+    {
+        std::wstring_convert<std::codecvt_utf8_utf16<utf16char>, utf16char> conversion;
+        return conversion.to_bytes(w);
+    }
+    catch (std::range_error& exception)
+    {
+        std::cout << exception.what();
+    }
+    
+    return "**ERROR_PROCESSING_CONTENT**";
+    
+#else
     const size_t srcSize = w.size();
     const utf16string::value_type* const srcData = &w[0];
     std::string dest(count_utf16_to_utf8(w), '\0');
@@ -522,6 +540,7 @@ std::string __cdecl conversions::utf16_to_utf8(const utf16string &w)
     }
 
     return dest;
+#endif
 }
 
 utf16string __cdecl conversions::usascii_to_utf16(const std::string &s)

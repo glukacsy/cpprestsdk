@@ -7,17 +7,10 @@ source_group("Header Files\\cpprest" FILES ${HEADERS_CPPREST})
 source_group("Header Files\\pplx" FILES ${HEADERS_PPLX})
 source_group("Header Files\\cpprest\\details" FILES ${HEADERS_DETAILS})
 
-<<<<<<< HEAD
-set(SOURCES
-  ${HEADERS_CPPREST}
-  ${HEADERS_PPLX}
-  ${HEADERS_DETAILS}
-  pch/stdafx.h
-  http/client/http_client.cpp
-=======
 
-set(SOURCES_COMMON
->>>>>>> improve cmake files for windows
+
+set(SOURCES
+  http/client/http_client.cpp
   http/client/http_client_msg.cpp
   http/client/http_client_impl.h
   http/client/x509_cert_utilities.cpp
@@ -158,33 +151,29 @@ set(CPPREST_USES_OPENSSL OFF)
 set(CPPREST_USES_ZLIB OFF)
 set(CPPREST_USES_WEBSOCKETPP OFF)
 
-if (WIN32 AND NOT WINDOWS_STORE AND NOT WINDOWS_PHONE)
+if(WIN32 AND NOT WINDOWS_STORE AND NOT WINDOWS_PHONE)
   target_link_libraries(cpprest PRIVATE
     bcrypt.lib
     crypt32.lib
   )
-elseif(APPLE)
+endif()
+
+if(APPLE)
     list(APPEND SOURCES
       pplx/pplxapple.cpp
-      http/client/x509_cert_utilities_apple.cpp
     )
     find_library(COREFOUNDATION CoreFoundation "/")
     find_library(SECURITY Security "/")
     set(EXTRALINKS ${COREFOUNDATION} ${SECURITY})
-  elseif(ANDROID)
+elseif(ANDROID)
     list(APPEND SOURCES
       http/client/x509_cert_utilities_android.cpp
       pplx/pplxlinux.cpp
     )
-  else()
-    list(APPEND SOURCES pplx/pplxlinux.cpp)
-  endif()
-  set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${WARNINGS} -Werror -pedantic")
 elseif(WIN32)
   set(SOURCES_WIN
-    ${SOURCES_COMMON}
+    ${SOURCES}
     http/client/http_client_winhttp.cpp
-    http/client/x509_cert_utilities_win32.cpp
     http/listener/http_server_httpsys.cpp
     pplx/pplxwin.cpp
     streams/fileio_win32.cpp
@@ -201,6 +190,8 @@ elseif(WIN32)
     bcrypt.lib
     crypt32.lib
   )
+else()
+  list(APPEND SOURCES pplx/pplxlinux.cpp)
 endif()
 
 # Websockets component

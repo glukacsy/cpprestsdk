@@ -58,4 +58,4 @@ bool verify_X509_cert_chain(const std::vector<std::string> &certChain, const std
 std::vector<std::vector<unsigned char>> get_X509_cert_chain_encoded_data(boost::asio::ssl::verify_context &verifyCtx);
 
 }}}}
-
+#endif

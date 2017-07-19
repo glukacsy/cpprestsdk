@@ -319,29 +319,18 @@ public:
         m_epoch++;
         m_connections.emplace_back(m_epoch, std::move(connection));
     }
-
-    std::shared_ptr<asio_connection> aquaire(Type type)
+    
+    std::shared_ptr<asio_connection> acquire()
     {
-        std::unique_lock<std::mutex> lock(m_connections_mutex);
-        std::shared_ptr<asio_connection> connection;
-        if ((type == Type::new_connection) || (type == Type::any_connection && m_connections.empty()))
-        {
-            lock.unlock();
-
-            // No connections in pool => create a new connection instance.
-            connection = std::make_shared<asio_connection>(m_io_service, m_start_with_ssl, m_ssl_context_callback);
-        }
-        else if (!m_connections.empty() && ((type == Type::reused_connection) || (type == Type::any_connection)))
-        {
-            // Reuse connection from pool.
-            connection = std::move(m_connections.back().second);
-            m_connections.pop_back();
-            lock.unlock();
-
-            connection->start_reuse();
-        }
+        std::lock_guard<std::mutex> lock(m_lock);
         
-        return connection;
+        if (m_connections.empty())
+            return nullptr;
+        
+        auto conn = std::move(m_connections.back().second);
+        m_connections.pop_back();
+        conn->start_reuse();
+        return conn;
     }
 
 private:
@@ -410,10 +399,11 @@ public:
 
     unsigned long open() override { return 0; }
 
-    void release_connection(std::shared_ptr<asio_connection>& conn)
+    void release_connection(std::shared_ptr<asio_connection> conn)
     {
         m_pool->release(conn);
     }
+    
     std::shared_ptr<asio_connection> obtain_connection()
     {
         std::shared_ptr<asio_connection> conn = m_pool->acquire();
@@ -432,8 +422,6 @@ public:
     virtual pplx::task<http_response> propagate(http_request request) override;
 
 public:
-    
-    asio_connection_pool m_pool;
     tcp::resolver m_resolver;
 private:
     const std::shared_ptr<asio_connection_pool> m_pool;
@@ -505,7 +493,9 @@ public:
     {
         if (m_connection)
         {
-            m_connection->upgrade_to_ssl();
+#if 0
+            m_connection->upgrade_to_ssl(m_client->client_config().get_ssl_context_callback());
+#endif
         }
     }
     
@@ -626,7 +616,7 @@ private:
             
             if (isValid(he_endpoints) && (he_endpoints)->endpoint().address().is_v6())
             {
-                auto connection_ipv6 = client_cast->m_pool.obtain(asio_connection_pool::Type::new_connection);
+                auto connection_ipv6 = client_cast->obtain_connection(/* asio_connection_pool::Type::new_connection */);
                 invokeUserCallback(connection_ipv6);
                 connect_unlocked(++m_requestsCount, connection_ipv6, he_endpoints, handler);
                 isIpv6Connecting = static_cast<bool>(connection_ipv6);
@@ -636,7 +626,7 @@ private:
             // Try to connectio using ipv4
             if (isValid(he_endpoints) && (he_endpoints)->endpoint().address().is_v4())
             {
-                auto connection_ipv4 = client_cast->m_pool.obtain(asio_connection_pool::Type::new_connection);
+                auto connection_ipv4 = client_cast->obtain_connection(/* asio_connection_pool::Type::new_connection */);
                 invokeUserCallback(connection_ipv4);
                 if (isIpv6Connecting)
                 {
@@ -973,7 +963,7 @@ public:
     static std::shared_ptr<request_context> create_request_context(std::shared_ptr<_http_client_communicator> &client, http_request &request)
     {
         auto client_cast(std::static_pointer_cast<asio_client>(client));
-        auto connection = client_cast->m_pool.obtain(asio_connection_pool::Type::reused_connection);
+        auto connection = client_cast->obtain_connection(/* asio_connection_pool::Type::reused_connection */);
         auto connection_he = std::make_shared<asio_connection_fast_ipv4_fallback>(client, fast_ipv4_fallback_delay, connection);
         auto ctx = std::make_shared<asio_context>(client, request, connection_he);
         ctx->m_timer.set_ctx(std::weak_ptr<asio_context>(ctx));
@@ -1105,7 +1095,7 @@ public:
                     return;
                 }
 
-                m_context->m_connection->upgrade_to_ssl(m_context->m_http_client->client_config().get_ssl_context_callback());
+                m_context->m_connection->upgrade_to_ssl();
 
                 m_ssl_tunnel_established(m_context);
             }
