@@ -299,26 +299,6 @@ class asio_connection_pool : public std::enable_shared_from_this<asio_connection
 public:
     asio_connection_pool() : m_pool_epoch_timer(crossplat::threadpool::shared_instance().service())
     {}
-
-    enum class Type {new_connection, reused_connection, any_connection};
-
-    void release(const std::shared_ptr<asio_connection>& connection)
-    {
-        connection->cancel();
-
-        if (!connection->keep_alive())
-            return;
-
-        std::lock_guard<std::mutex> lock(m_lock);
-        if (!is_timer_running)
-        {
-            start_epoch_interval(shared_from_this());
-            is_timer_running = true;
-        }
-
-        m_epoch++;
-        m_connections.emplace_back(m_epoch, std::move(connection));
-    }
     
     std::shared_ptr<asio_connection> acquire()
     {
@@ -331,6 +311,27 @@ public:
         m_connections.pop_back();
         conn->start_reuse();
         return conn;
+    }
+
+    void release(const std::shared_ptr<asio_connection>& connection)
+    {
+        if (connection)
+        {
+            connection->cancel();
+
+            if (!connection->keep_alive())
+                return;
+
+            std::lock_guard<std::mutex> lock(m_lock);
+            if (!is_timer_running)
+            {
+                start_epoch_interval(shared_from_this());
+                is_timer_running = true;
+            }
+
+            m_epoch++;
+            m_connections.emplace_back(m_epoch, std::move(connection));
+        }
     }
 
 private:
@@ -395,6 +396,8 @@ public:
         , m_start_with_ssl(base_uri().scheme() == U("https") && !this->client_config().proxy().is_specified())
     {}
 
+    enum class Type {new_connection, reused_connection, any_connection};
+    
     void send_request(const std::shared_ptr<request_context> &request_ctx) override;
 
     unsigned long open() override { return 0; }
@@ -404,16 +407,26 @@ public:
         m_pool->release(conn);
     }
     
-    std::shared_ptr<asio_connection> obtain_connection()
+    std::shared_ptr<asio_connection> obtain_connection(Type type)
     {
-        std::shared_ptr<asio_connection> conn = m_pool->acquire();
-
+        std::shared_ptr<asio_connection> conn;
+        
+        if (type == Type::reused_connection || type == Type::any_connection)
+        {
+            conn = m_pool->acquire();
+        }
+        
         if (conn == nullptr)
         {
-            // Pool was empty. Create a new connection
-            conn = std::make_shared<asio_connection>(crossplat::threadpool::shared_instance().service());
-            if (m_start_with_ssl)
-                conn->upgrade_to_ssl(this->client_config().get_ssl_context_callback());
+            if (type == Type::new_connection || type == Type::any_connection)
+            {
+                // Pool was empty. Create a new connection
+                conn = std::make_shared<asio_connection>(crossplat::threadpool::shared_instance().service());
+                if (m_start_with_ssl)
+                {
+                    conn->upgrade_to_ssl(this->client_config().get_ssl_context_callback());
+                }
+            }
         }
 
         return conn;
@@ -493,9 +506,11 @@ public:
     {
         if (m_connection)
         {
-#if 0
-            m_connection->upgrade_to_ssl(m_client->client_config().get_ssl_context_callback());
-#endif
+            if (auto client = m_client.lock())
+            {
+                m_connection->upgrade_to_ssl(client->client_config().get_ssl_context_callback());
+        
+            }
         }
     }
     
@@ -616,7 +631,7 @@ private:
             
             if (isValid(he_endpoints) && (he_endpoints)->endpoint().address().is_v6())
             {
-                auto connection_ipv6 = client_cast->obtain_connection(/* asio_connection_pool::Type::new_connection */);
+                auto connection_ipv6 = client_cast->obtain_connection(asio_client::Type::new_connection);
                 invokeUserCallback(connection_ipv6);
                 connect_unlocked(++m_requestsCount, connection_ipv6, he_endpoints, handler);
                 isIpv6Connecting = static_cast<bool>(connection_ipv6);
@@ -626,7 +641,7 @@ private:
             // Try to connectio using ipv4
             if (isValid(he_endpoints) && (he_endpoints)->endpoint().address().is_v4())
             {
-                auto connection_ipv4 = client_cast->obtain_connection(/* asio_connection_pool::Type::new_connection */);
+                auto connection_ipv4 = client_cast->obtain_connection(asio_client::Type::new_connection);
                 invokeUserCallback(connection_ipv4);
                 if (isIpv6Connecting)
                 {
@@ -963,7 +978,7 @@ public:
     static std::shared_ptr<request_context> create_request_context(std::shared_ptr<_http_client_communicator> &client, http_request &request)
     {
         auto client_cast(std::static_pointer_cast<asio_client>(client));
-        auto connection = client_cast->obtain_connection(/* asio_connection_pool::Type::reused_connection */);
+        auto connection = client_cast->obtain_connection(asio_client::Type::reused_connection);
         auto connection_he = std::make_shared<asio_connection_fast_ipv4_fallback>(client, fast_ipv4_fallback_delay, connection);
         auto ctx = std::make_shared<asio_context>(client, request, connection_he);
         ctx->m_timer.set_ctx(std::weak_ptr<asio_context>(ctx));
@@ -1731,7 +1746,6 @@ private:
                 // Failed to write to socket because connection was already closed while it was in the pool.
                 // close() here ensures socket is closed in a robust way and prevents the connection from being put to the pool again.
                 m_connection->close();
-                m_request.body().streambuf().seekpos(0, std::ios::in);
                 // Create a new context and copy the request object, completion event and
                 // cancellation registration to maintain the old state.
                 // This also obtains a new connection from pool.
