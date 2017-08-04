@@ -40,7 +40,7 @@
 
 namespace web { namespace http { namespace client { namespace details {
 
-static bool verify_X509_cert_chain(const std::vector<std::string> &certChain, const std::string &hostName);
+static bool verify_X509_cert_chain(const std::vector<std::string> &certChain, const std::string &hostName, const CertificateChainFunction& certInfoFunc);
 
 bool is_end_certificate_in_chain(boost::asio::ssl::verify_context &verifyCtx)
 {
@@ -52,6 +52,7 @@ bool is_end_certificate_in_chain(boost::asio::ssl::verify_context &verifyCtx)
     }
     return true;
 }
+
 
 bool verify_cert_chain_platform_specific(boost::asio::ssl::verify_context &verifyCtx, const std::string &hostName, const CertificateChainFunction& func)
 {
@@ -106,6 +107,16 @@ bool verify_cert_chain_platform_specific(boost::asio::ssl::verify_context &verif
     return verify_result;
 }
 
+#if defined(__linux__)
+
+bool verify_X509_cert_chain(const std::vector<std::string> &certChain, const std::string &hostName, const CertificateChainFunction& certInfoFunc)
+{
+	// Not implemented. Return false just in case
+	return false;
+}
+
+#endif
+
 #if defined(ANDROID) || defined(__ANDROID__)
 using namespace crossplat;
 
@@ -147,7 +158,7 @@ static bool jni_failed(JNIEnv *env, const jmethodID &result)
 #define CHECK_JMID(env, mid) if(jni_failed(env, mid)) return false;
 #define CHECK_JNI(env) if(jni_failed(env)) return false;
 
-bool verify_X509_cert_chain(const std::vector<std::string> &certChain, const std::string &hostName)
+bool verify_X509_cert_chain(const std::vector<std::string> &certChain, const std::string &hostName, const CertificateChainFunction& certInfoFunc)
 {
     JNIEnv* env = get_jvm_env();
 
