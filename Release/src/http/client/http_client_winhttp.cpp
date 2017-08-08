@@ -1137,7 +1137,23 @@ private:
                     CertFreeCertificateContext(pCert);
                 }
 
-                auto info = std::make_shared<certificate_info>(utility::conversions::to_utf8string(web::uri(url).host()), cert_chain, dwErrorStatus);
+                utility::string_t host;
+
+                try
+                {
+                    host = web::uri(url).host();
+                }
+                catch (std::exception e)
+                {
+                    host = url;
+                }
+
+                if (host.empty())
+                {
+                    host = url;
+                }
+
+                auto info = std::make_shared<certificate_info>(utility::conversions::to_utf8string(host), cert_chain, dwErrorStatus);
 
                 if (dwErrorStatus == CERT_TRUST_NO_ERROR || dwErrorStatus == CERT_TRUST_REVOCATION_STATUS_UNKNOWN || dwErrorStatus == (CERT_TRUST_IS_OFFLINE_REVOCATION | CERT_TRUST_REVOCATION_STATUS_UNKNOWN))
                 {
