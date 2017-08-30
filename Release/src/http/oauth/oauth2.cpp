@@ -138,6 +138,10 @@ pplx::task<void> oauth2_config::_request_token(uri_builder& request_body_ub)
     return token_client.request(request)
     .then([](http_response resp)
     {
+        if (resp.status_code() >= web::http::status_codes::MultipleChoices) //http status code 300
+        {
+            throw oauth2_http_exception(resp.status_code(), resp.headers(), U("Encountered a non 2xx response during oauth2 flow"));
+        }
         return resp.extract_json();
     })
     .then([this](json::value json_resp) -> void

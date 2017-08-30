@@ -70,6 +70,24 @@ private:
 };
 
 /// <summary>
+/// Exception type oauth2_http_exception for oauth exception over 300.
+/// </summary>
+class oauth2_http_exception : public std::exception
+{
+public:
+    oauth2_http_exception(web::http::status_code status_code, web::http::http_headers headers, utility::string_t msg) : m_status_code(status_code), m_headers(headers), m_msg(utility::conversions::to_utf8string(std::move(msg))) {}
+    ~oauth2_http_exception() CPPREST_NOEXCEPT {}
+    const char* what() const CPPREST_NOEXCEPT { return m_msg.c_str(); }
+    web::http::status_code status_code() const { return m_status_code; }
+    web::http::http_headers headers() const { return m_headers; }
+
+private:
+    std::string m_msg;
+    web::http::status_code m_status_code;
+    web::http::http_headers m_headers;
+};
+
+/// <summary>
 /// OAuth 2.0 token and associated information.
 /// </summary>
 class oauth2_token
