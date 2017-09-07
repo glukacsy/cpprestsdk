@@ -40,8 +40,6 @@
 
 namespace web { namespace http { namespace client { namespace details {
 
-static bool verify_X509_cert_chain(const std::vector<std::string> &certChain, const std::string &hostName, const CertificateChainFunction& certInfoFunc);
-
 bool is_end_certificate_in_chain(boost::asio::ssl::verify_context &verifyCtx)
 {
     X509_STORE_CTX *storeContext = verifyCtx.native_handle();

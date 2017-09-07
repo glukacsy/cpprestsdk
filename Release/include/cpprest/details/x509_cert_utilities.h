@@ -51,9 +51,10 @@ bool is_end_certificate_in_chain(boost::asio::ssl::verify_context &verifyCtx);
 /// <returns>True if verification passed and server can be trusted, false otherwise.</returns>
 bool verify_cert_chain_platform_specific(boost::asio::ssl::verify_context &verifyCtx, const std::string &hostName, const CertificateChainFunction& func = nullptr);
 
+#endif
+
 bool verify_X509_cert_chain(const std::vector<std::string> &certChain, const std::string &hostName, const CertificateChainFunction& func = nullptr);
 
-#endif
 
 std::vector<std::vector<unsigned char>> get_X509_cert_chain_encoded_data(boost::asio::ssl::verify_context &verifyCtx);
 
