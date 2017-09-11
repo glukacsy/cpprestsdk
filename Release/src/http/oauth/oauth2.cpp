@@ -140,7 +140,7 @@ pplx::task<void> oauth2_config::_request_token(uri_builder& request_body_ub)
     {
         if (resp.status_code() >= web::http::status_codes::MultipleChoices) //http status code 300
         {
-            throw oauth2_http_exception(resp.status_code(), resp.headers(), U("Unhandled http response: ") +  resp.extract_json().get().serialize());
+           // throw oauth2_http_exception(resp.status_code(), resp.headers(), U("Encountered a non 2xx response during oauth2 flow"));
         }
         return resp.extract_json();
     })

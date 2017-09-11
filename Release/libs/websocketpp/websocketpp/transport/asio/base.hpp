@@ -177,11 +177,7 @@ enum value {
     proxy_invalid,
 
     /// Invalid host or service
-    invalid_host_service,
-
-    /// Require Proxy Credentials to authenticate with basic or digest authentication
-    proxy_credentials_required
-
+    invalid_host_service
 };
 
 /// Asio transport error category
@@ -203,8 +199,6 @@ public:
                 return "Proxy connection failed";
             case error::proxy_invalid:
                 return "Invalid proxy URI";
-            case error::proxy_credentials_required:
-                return "Proxy credentials required for basic/digest authentication";
             case error::invalid_host_service:
                 return "Invalid host or service";
             default:
