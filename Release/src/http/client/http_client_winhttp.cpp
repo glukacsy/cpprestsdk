@@ -964,10 +964,24 @@ private:
                 cred = p_request_context->m_http_client->client_config().credentials();
                 p_request_context->m_server_authentication_tried = true;
             }
-            else if (dwAuthTarget == WINHTTP_AUTH_TARGET_PROXY && !p_request_context->m_proxy_authentication_tried)
+            else if (dwAuthTarget == WINHTTP_AUTH_TARGET_PROXY)
             {
-                cred = p_request_context->m_http_client->client_config().proxy().credentials();
-                p_request_context->m_proxy_authentication_tried = true;
+                bool isRedirect = false;
+
+                try
+                {
+                    web::uri currentUri(getRequestUrl(hRequestHandle));
+                    isRedirect = p_request_context->m_request.absolute_uri().to_string() != currentUri.to_string();
+                }
+                catch (const std::exception&)
+                {
+                }
+
+                if (isRedirect || !p_request_context->m_proxy_authentication_tried)
+                {
+                    cred = p_request_context->m_http_client->client_config().proxy().credentials();
+                    p_request_context->m_proxy_authentication_tried = true;
+                }
             }
 
             // No credentials found so can't resend.
@@ -1070,15 +1084,7 @@ private:
                 }
 			case WINHTTP_CALLBACK_STATUS_SENDING_REQUEST:
             {
-                // get actual URL which might be different from the original one due to redirection etc.
-                DWORD urlSize{ 0 };
-                WinHttpQueryOption(hRequestHandle, WINHTTP_OPTION_URL, NULL, &urlSize);
-                auto urlwchar = new WCHAR[urlSize / sizeof(WCHAR)];
-
-                WinHttpQueryOption(hRequestHandle, WINHTTP_OPTION_URL, (void*)urlwchar, &urlSize);
-                utility::string_t url(urlwchar);
-
-                delete[] urlwchar;
+                auto url = getRequestUrl(hRequestHandle);
 
                 // obtain leaf cert based on which we will be able to build the certificate chain
                 PCCERT_CONTEXT pCert{ nullptr };
@@ -1475,11 +1481,28 @@ private:
         }
     }
 
+    static utility::string_t getRequestUrl(HINTERNET hRequestHandle);
+
     // WinHTTP session and connection
     HINTERNET m_hSession;
     HINTERNET m_hConnection;
     bool      m_secure;
 };
+
+utility::string_t winhttp_client::getRequestUrl(HINTERNET hRequestHandle)
+{
+    // get actual URL which might be different from the original one due to redirection etc.
+    DWORD urlSize{ 0 };
+    WinHttpQueryOption(hRequestHandle, WINHTTP_OPTION_URL, NULL, &urlSize);
+    auto urlwchar = new WCHAR[urlSize / sizeof(WCHAR)];
+
+    WinHttpQueryOption(hRequestHandle, WINHTTP_OPTION_URL, (void*)urlwchar, &urlSize);
+    utility::string_t url(urlwchar);
+
+    delete[] urlwchar;
+
+    return url;
+}
 
 std::shared_ptr<_http_client_communicator> create_platform_final_pipeline_stage(uri&& base_uri, http_client_config&& client_config)
 {

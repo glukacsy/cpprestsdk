@@ -870,23 +870,32 @@ protected:
             std::string connection_header = m_proxy_data->res.get_header("Connection");
 
             if (m_proxy_data->res.get_status_code() == http::status_code::proxy_authentication_required) {
+
                 if (websocketpp::lib::string_utils::icompare(connection_header, "Close")) {
+
                     reconnect = true;
                 }
-
-                m_elog->write(log::elevel::info, "Proxy authorization Required");
-
-                std::string auth_headers = m_proxy_data->res.get_header("Proxy-Authenticate");
-
+                
                 if (m_proxy_data->proxy_authenticator) {
+
+                    m_elog->write(log::elevel::info, "Proxy authorization Required");
+
+                    std::string auth_headers = m_proxy_data->res.get_header("Proxy-Authenticate");
 
                     bool next_token = m_proxy_data->proxy_authenticator->next_token(auth_headers);
 
                     if (next_token && !reconnect) {
+
                         m_proxy_data->res = response_type();
                         m_proxy_data->req.replace_header("Proxy-Authorization", m_proxy_data->proxy_authenticator->get_auth_token());
 
                         proxy_write(callback);
+
+                        return;
+                    }
+                    else if(!next_token)
+                    {
+                        callback(make_error_code(error::proxy_credentials_required));
 
                         return;
                     }
@@ -1299,6 +1308,7 @@ private:
 
     std::string m_proxy;
     lib::shared_ptr<proxy_data> m_proxy_data;
+    rng_type & m_rng;
 
     // transport resources
     io_service_ptr  m_io_service;
