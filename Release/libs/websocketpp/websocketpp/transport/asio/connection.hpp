@@ -1308,7 +1308,6 @@ private:
 
     std::string m_proxy;
     lib::shared_ptr<proxy_data> m_proxy_data;
-    rng_type & m_rng;
 
     // transport resources
     io_service_ptr  m_io_service;
