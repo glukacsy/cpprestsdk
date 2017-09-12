@@ -275,11 +275,11 @@ public:
     /// </summary>
     /// <param name="authorization_code">Code received via redirect upon successful authorization.</param>
     /// <returns>Task that fetches token(s) based on the authorization code.</returns>
-    pplx::task<void> token_from_code(utility::string_t authorization_code)
+    pplx::task<void> token_from_code(utility::string_t authorization_code_param, const utility::string_t& grant_type = details::oauth2_strings::authorization_code)
     {
         uri_builder ub;
-        ub.append_query(details::oauth2_strings::grant_type, details::oauth2_strings::authorization_code, false);
-        ub.append_query(details::oauth2_strings::code, uri::encode_data_string(std::move(authorization_code)), false);
+        ub.append_query(details::oauth2_strings::grant_type, grant_type, false);
+        ub.append_query(details::oauth2_strings::code, uri::encode_data_string(std::move(authorization_code_param)), false);
         ub.append_query(details::oauth2_strings::redirect_uri, uri::encode_data_string(redirect_uri()), false);
         return _request_token(ub);
     }
