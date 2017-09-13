@@ -69,15 +69,24 @@
 
 #endif
 
-
 #ifdef _NO_ASYNCRTIMP
-#define _ASYNCRTIMP
+#   define _ASYNCRTIMP
 #else
-#ifdef _ASYNCRT_EXPORT
-#define _ASYNCRTIMP __declspec(dllexport)
-#else
-#define _ASYNCRTIMP __declspec(dllimport)
-#endif
+#   if defined(_WIN32)
+#       ifdef _ASYNCRT_EXPORT
+#           define _ASYNCRTIMP __declspec(dllexport)
+#       else
+#           define _ASYNCRTIMP __declspec(dllimport)
+#       endif
+#    elif defined(__APPLE__)
+#        ifdef _ASYNCRT_EXPORT
+#            define _ASYNCRTIMP __attribute__((visibility("default")))
+#        else
+#            define _ASYNCRTIMP
+#        endif // _ASYNCRT_EXPORT
+#     else
+#        define _ASYNCRTIMP
+#     endif // _WIN32
 #endif
 
 #ifdef CASABLANCA_DEPRECATION_NO_WARNINGS
