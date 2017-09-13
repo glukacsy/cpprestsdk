@@ -27,14 +27,24 @@
 #endif // _WIN32
 
 #ifdef _NO_PPLXIMP
-#define _PPLXIMP
+#    define _PPLXIMP
 #else
-#ifdef _PPLX_EXPORT
-#define _PPLXIMP __declspec(dllexport)
-#else
-#define _PPLXIMP __declspec(dllimport)
-#endif
-#endif
+#    if defined(_WIN32)
+#        ifdef _PPLX_EXPORT
+#            define _PPLXIMP __declspec(dllexport)
+#        else
+#            define _PPLXIMP __declspec(dllimport)
+#        endif // _PPLX_EXPORT
+#    elif defined(__APPLE__)
+#        ifdef _PPLX_EXPORT
+#            define _PPLXIMP __attribute__((visibility("default")))
+#        else
+#            define _PPLXIMP
+#        endif // _PPLX_EXPORT
+#     else
+#        define _PPLXIMP
+#     endif // _WIN32
+#endif // _NO_PPLXIMP
 
 #include "cpprest/details/cpprest_compat.h"
 
@@ -42,8 +52,6 @@
 #ifdef _WIN32
 #include "pplx/pplxwin.h"
 #elif defined(__APPLE__)
-#undef _PPLXIMP
-#define _PPLXIMP
 #include "pplx/pplxlinux.h"
 #else
 #include "pplx/pplxlinux.h"
