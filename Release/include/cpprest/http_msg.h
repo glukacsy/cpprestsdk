@@ -244,10 +244,10 @@ class http_msg_base
 public:
 
     friend class http::client::http_client;
-
+    
+    virtual _ASYNCRTIMP ~http_msg_base();
+    
     _ASYNCRTIMP http_msg_base();
-
-    virtual ~http_msg_base() {}
 
     http_headers &headers() { return m_headers; }
 
@@ -357,7 +357,7 @@ class _http_server_context
 {
 public:
     _http_server_context() {}
-    virtual ~_http_server_context() {}
+    virtual _ASYNCRTIMP ~_http_server_context();
 private:
 };
 
@@ -367,9 +367,11 @@ private:
 class _http_response final : public http::details::http_msg_base
 {
 public:
-    _http_response() : m_status_code((std::numeric_limits<uint16_t>::max)()) { }
-
-    _http_response(http::status_code code) : m_status_code(code) {}
+    virtual _ASYNCRTIMP ~_http_response();
+    
+    _ASYNCRTIMP _http_response();
+    
+    _ASYNCRTIMP _http_response(http::status_code code);
 
     http::status_code status_code() const { return m_status_code; }
 
@@ -698,12 +700,11 @@ namespace details {
 class _http_request final : public http::details::http_msg_base, public std::enable_shared_from_this<_http_request>
 {
 public:
-
+    virtual _ASYNCRTIMP ~_http_request();
+    
     _ASYNCRTIMP _http_request(http::method mtd);
 
     _ASYNCRTIMP _http_request(std::unique_ptr<http::details::_http_server_context> server_context);
-
-    virtual ~_http_request() {}
 
     http::method &method() { return m_method; }
 
@@ -805,7 +806,7 @@ public:
     /// <summary>
     /// Destructor frees any held resources.
     /// </summary>
-    ~http_request() {}
+    ~http_request() = default;
 
     /// <summary>
     /// Get the method (GET/PUT/POST/DELETE) of the request message.

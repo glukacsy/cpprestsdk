@@ -259,6 +259,9 @@ http_msg_base::http_msg_base()
       m_default_outstream(false)
 {
 }
+    
+http_msg_base::~http_msg_base()
+{}
 
 void http_msg_base::_prepare_to_receive_data()
 {
@@ -384,6 +387,36 @@ void http_msg_base::_complete(utility::size64_t body_size, const std::exception_
             });
         });
     }
+}
+    
+details::_http_response::_http_response() : m_status_code((std::numeric_limits<uint16_t>::max)())
+{ }
+    
+details::_http_response::_http_response(http::status_code code) : m_status_code(code)
+{}
+    
+details::_http_response::~_http_response()
+{}
+        
+details::_http_server_context::~_http_server_context()
+{}
+    
+utility::string_t details::_http_response::to_string() const
+{
+    // If the user didn't explicitly set a reason phrase then we should have it default
+    // if they used one of the standard known status codes.
+    auto reason_phrase = m_reason_phrase;
+    if(reason_phrase.empty())
+    {
+        reason_phrase = get_default_reason_phrase(status_code());
+    }
+    
+    utility::ostringstream_t buffer;
+    buffer.imbue(std::locale::classic());
+    buffer << _XPLATSTR("HTTP/1.1 ") << m_status_code << _XPLATSTR(" ") << reason_phrase << _XPLATSTR("\r\n");
+    
+    buffer << http_msg_base::to_string();
+    return buffer.str();
 }
 
 static bool is_content_type_one_of(const utility::string_t *first, const utility::string_t *last, const utility::string_t &value)
@@ -990,7 +1023,7 @@ void details::http_msg_base::set_body(const concurrency::streams::istream &instr
     set_body(instream, contentType);
     m_data_available.set(contentLength);
 }
-
+    
 details::_http_request::_http_request(http::method mtd)
   : m_method(std::move(mtd)),
     m_initiated_response(0),
@@ -1002,6 +1035,9 @@ details::_http_request::_http_request(http::method mtd)
         throw std::invalid_argument("Invalid HTTP method specified. Method can't be an empty string.");
     }
 }
+    
+details::_http_request::~_http_request()
+{}
 
 details::_http_request::_http_request(std::unique_ptr<http::details::_http_server_context> server_context)
   : m_initiated_response(0),

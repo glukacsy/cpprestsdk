@@ -68,22 +68,4 @@ utility::string_t details::_http_request::to_string() const
     return buffer.str();
 }
 
-utility::string_t details::_http_response::to_string() const
-{
-    // If the user didn't explicitly set a reason phrase then we should have it default
-    // if they used one of the standard known status codes.
-    auto reason_phrase = m_reason_phrase;
-    if(reason_phrase.empty())
-    {
-        reason_phrase = get_default_reason_phrase(status_code());
-    }
-
-    utility::ostringstream_t buffer;
-    buffer.imbue(std::locale::classic());
-    buffer << _XPLATSTR("HTTP/1.1 ") << m_status_code << _XPLATSTR(" ") << reason_phrase << _XPLATSTR("\r\n");
-
-    buffer << http_msg_base::to_string();
-    return buffer.str();
-}
-
 }} // namespace web::http
